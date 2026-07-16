@@ -40,7 +40,10 @@ case "$CMD" in
 esac
 
 # Extract first command (before pipes/&&)
-FIRST_CMD=$(echo "$CMD" | sed 's/[|&;].*//' | sed 's/^\s*//' | sed 's/\s*$//')
+# POSIX character classes: BSD sed (macOS) treats \s as a literal "s",
+# silently truncating commands whose first segment ends in "s"
+# ("src/main.rs" -> "src/main.r"). [[:space:]] works on GNU and BSD sed.
+FIRST_CMD=$(echo "$CMD" | sed 's/[|&;].*//' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
 
 # Preserve environment variable prefixes (e.g., ODOO_RC=/etc/odoo.conf invoke test)
 ENV_PREFIX=$(echo "$FIRST_CMD" | grep -oE '^([A-Za-z_][A-Za-z0-9_]*=[^ ]* +)+' || echo "")
