@@ -3,8 +3,8 @@
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  MODEL MIGRATION GUIDE: Odoo 18.0 → 19.0                                     ║
-║  Focus: Mandatory type hints, mandatory SQL builder                          ║
-║  Note: v19 is in development - patterns may change.                          ║
+║  Focus: SQL constraints, domains, aggregation, field renames                 ║
+║  Verified against the 18.0 and 19.0 (final) source trees.                    ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -12,13 +12,16 @@
 
 | Feature | v18 Status | v19 Status | Action |
 |---------|------------|------------|--------|
-| Type hints | Recommended | **Mandatory** | Must add |
-| `SQL()` builder | Recommended | **Mandatory** | Must use |
-| Raw SQL strings | Deprecated | **Removed** | Must migrate |
+| `_sql_constraints` | Supported | **Ignored** (warning only) | Convert to `models.Constraint()` |
+| `odoo.osv.expression` | Standard | Deprecated | Use `odoo.fields.Domain` |
+| `read_group()` | Public API | Deprecated | `_read_group()` / `formatted_read_group()` |
+| `groups_id` (res.users) | Field name | Renamed `group_ids` | Rename |
+| Type hints | Optional | Optional | Nothing to do |
+| `SQL()` builder | Recommended | Recommended (plain `cr.execute(str, params)` still works) | Nothing mandatory |
 
-## MANDATORY: Type Hints
+## Type Hints (optional in both versions)
 
-### Before (v18 - Optional)
+### Without hints (valid in v18 and v19)
 ```python
 def calculate_totals(self, options=None):
     options = options or {}
@@ -45,7 +48,7 @@ def create(self, vals_list):
     return super().create(vals_list)
 ```
 
-### After (v19 - Mandatory)
+### With hints (optional style)
 ```python
 from __future__ import annotations
 
@@ -80,12 +83,12 @@ def create(self, vals_list: list[dict[str, Any]]) -> 'MyModel':
     return super().create(vals_list)
 ```
 
-## MANDATORY: SQL Builder
+## SQL Builder (recommended in both versions)
 
-### Before (v18 - Allowed but deprecated)
+### Unsafe in any version (identifier formatted into the string)
 ```python
 def _get_report_data(self):
-    # This will FAIL in v19
+    # Do not build SQL with % / f-strings, even for table names
     query = """
         SELECT id, name, amount
         FROM %s
@@ -96,7 +99,7 @@ def _get_report_data(self):
     return self.env.cr.dictfetchall()
 ```
 
-### After (v19 - Required)
+### Preferred (v18 and v19)
 ```python
 from odoo.tools import SQL
 
@@ -165,20 +168,12 @@ class MyModel(models.Model):
         return {
             'type': 'ir.actions.act_window',
             'res_model': 'my.model',
-            'view_mode': 'tree,form',
+            'view_mode': 'list,form',  # 'tree' is not a view type in 18/19
         }
 
-    # Search methods
-    @api.model
-    def _name_search(
-        self,
-        name: str = '',
-        domain: Optional[list[tuple[str, str, Any]]] = None,
-        operator: str = 'ilike',
-        limit: int = 100,
-        order: Optional[str] = None,
-    ) -> Sequence[int]:
-        return self._search(domain or [], limit=limit, order=order)
+    # Search: name_search() searches display_name in 18 and 19; customize via
+    # _rec_names_search or _search_display_name(operator, value)
+    _rec_names_search = ['name', 'code']
 
     # Custom methods with various types
     def process_data(
@@ -252,29 +247,44 @@ query = SQL(
 )
 ```
 
+## Official guideline deltas 18.0 -> 19.0
+
+Only the ORM rows of the verified official-guideline matrix that change between 18.0 and 19.0:
+
+| Topic | 18.0 | 19.0 |
+|-------|------|------|
+| SQL constraints | `_sql_constraints = [(name, sql, msg)]` | `_name_uniq = models.Constraint('UNIQUE(name)', msg)`; `_sql_constraints` ignored with a warning |
+| Multi-column index | `init()` + `odoo.tools.sql.create_index(cr, name, table, [cols])` | `_my_idx = models.Index('(col_a, col_b)')` / `models.UniqueIndex(...)` |
+| Combine domains | `expression.AND([d1, d2])` | `Domain(d1) & Domain(d2)` (`from odoo.fields import Domain`) |
+| `create` override with `@api.model` | DeprecationWarning | converted silently (still use `@api.model_create_multi`) |
+| Aggregation | `_read_group(domain, groupby, aggregates)` -> tuples; `read_group` (dicts) | `_read_group` unchanged; `read_group` deprecated -> `formatted_read_group` |
+| Translation | `self.env._("%s", arg)`; list args printed as Python lists | iterable args formatted per language |
+| Archiving | `toggle_active()` available | `toggle_active()` deprecated -> `action_archive()` / `action_unarchive()` |
+| Public classmethods | RPC-callable unless prefixed `_` | blocked by the RPC guard |
+
+Unchanged: `grouped()`, related-through-x2many truncation (first record only), `with self.env.cr.savepoint():`, `_check_company_auto` opt-in, `t-lang` only with `t-call`, `_get_report_values` must return `doc_ids`/`doc_model`/`docs`.
+
 ## Migration Checklist
 
 ### For All Models
-- [ ] Add `from __future__ import annotations` at file top
-- [ ] Add type hints to ALL method parameters
-- [ ] Add return type annotations to ALL methods
-- [ ] Import types from `typing` and `collections.abc`
+- [ ] Convert every `_sql_constraints` to `models.Constraint()` / `models.UniqueIndex()`
+- [ ] Move `init()`-created multi-column indexes to `models.Index()` (optional)
+- [ ] Replace `expression.AND/OR` with `Domain` (optional, deprecated only)
+- [ ] Replace `read_group()` calls
+- [ ] Rename `groups_id` -> `group_ids`
 
 ### For SQL Queries
-- [ ] Replace ALL raw SQL strings with `SQL()` builder
-- [ ] Verify all queries work correctly
+- [ ] Prefer `SQL()` builder; never format values or identifiers into strings
 - [ ] Test with various input parameters
 
 ### Python Version
-- [ ] Ensure Python 3.12+ is installed
-- [ ] Use new Python features where beneficial
+- [ ] Python 3.10+ (both versions)
 
 ### Testing
-- [ ] Run type checker (mypy, pyright) on code
-- [ ] Test all SQL queries
+- [ ] Verify constraints are still enforced after migration (write a test that violates them)
 - [ ] Verify all methods work correctly
 
-## Type Checker Script
+## Type Checker Script (optional)
 
 ```python
 #!/usr/bin/env python3
@@ -312,23 +322,14 @@ if __name__ == '__main__':
 
 ## Common Migration Errors
 
-### Error: Missing type hints
+### Warning: `_sql_constraints` no longer supported
 ```
-TypeError: Missing type annotation for parameter 'vals'
+WARNING ... Model attribute '_sql_constraints' is no longer supported, please define models.Constraint on the model.
 ```
-**Fix**: Add type hints to all method parameters.
+**Fix**: Convert each tuple to a `models.Constraint` class attribute (name starting with `_`); until then the constraint is NOT applied.
 
-### Error: Raw SQL not allowed
-```
-SecurityError: Raw SQL strings are deprecated. Use SQL() builder.
-```
-**Fix**: Convert all raw SQL to use `SQL()` builder.
-
-### Error: Invalid type hint syntax
-```
-SyntaxError: invalid syntax (type hint)
-```
-**Fix**: Ensure Python 3.12+ is used and correct syntax.
+### Error: Invalid field 'groups_id' on model 'res.users'
+**Fix**: Use `group_ids`.
 
 ### Error: Circular import with type hints
 ```

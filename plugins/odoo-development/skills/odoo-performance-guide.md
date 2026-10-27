@@ -14,7 +14,7 @@
 2. **Use stored computed fields** - When values don't change frequently
 3. **Index search fields** - For frequently filtered/searched fields
 4. **Avoid sudo() in loops** - Cache environment when needed
-5. **Use SQL for bulk operations** - When ORM overhead is prohibitive
+5. **Use SQL for bulk operations** - Only when ORM overhead is prohibitive: raw SQL bypasses access rights, record rules, `active` handling, translations and cache invalidation
 
 ## Database Query Optimization
 
@@ -46,7 +46,7 @@ data = self.env['sale.order'].search_read(
 for data in data_list:
     self.env['my.model'].create(data)
 
-# GOOD: Batch create (v15+)
+# GOOD: Batch create (all versions 14-19; overrides use @api.model_create_multi)
 self.env['my.model'].create(data_list)
 
 # BAD: Individual writes
@@ -63,6 +63,55 @@ for record in records:
 # GOOD: Batch unlink
 records.unlink()
 ```
+
+### Batch ORM Calls (Official Odoo Guideline, verified for 14.0-19.0)
+
+From Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0), checked against the 14.0-19.0 sources: make **one** ORM call for the whole collection. An ORM call (`search`, `search_count`, aggregates, `create`) inside a `for` loop over records or vals is one query per iteration - O(n) round-trips instead of O(1).
+
+Exceptions: a loop that only computes in memory on already-read fields is fine; when a per-record call is truly unavoidable (e.g. an external API per record), bound the batch size.
+
+```python
+# BAD (all versions): one aggregate query per author
+for author in authors:
+    author.book_count = Book.search_count([('author_id', '=', author.id)])
+```
+
+The grouped replacement depends on the version:
+
+```python
+# 14.0-16.0 (also works in 17.0-18.0; deprecated in 19.0): read_group -> list of dicts
+groups = Book.read_group(
+    [('author_id', 'in', authors.ids)], ['author_id'], ['author_id'],
+)
+# lazy=True (default): count key is '<groupby>_count'; many2one value is (id, display_name)
+counts = {g['author_id'][0]: g['author_id_count'] for g in groups if g['author_id']}
+for author in authors:
+    author.book_count = counts.get(author.id, 0)
+
+# Sum per group, 14.0-16.0
+groups = Book.read_group(
+    [('author_id', 'in', authors.ids)], ['price:sum'], ['author_id'], lazy=False,
+)
+totals = {g['author_id'][0]: g['price'] for g in groups if g['author_id']}  # count in g['__count']
+```
+
+```python
+# 17.0+: _read_group(domain, groupby, aggregates) -> list of tuples, groupby values are records
+counts = {
+    author.id: count
+    for author, count in Book._read_group(
+        [('author_id', 'in', authors.ids)], ['author_id'], ['__count'],
+    )
+}
+for author in authors:
+    author.book_count = counts.get(author.id, 0)
+
+# Sum per group, 17.0+
+totals = dict(Book._read_group([('author_id', 'in', authors.ids)], ['author_id'], ['price:sum']))
+# keys are author records: totals.get(author, 0.0)
+```
+
+In 16.0 `_read_group` exists but has the **old** `read_group` signature (fields, groupby, lazy) and returns dicts - do not use the 17.0 tuple form there. In 19.0 `read_group` is deprecated; use `_read_group` (or `formatted_read_group` when dicts are needed).
 
 ### Efficient Searching
 
@@ -105,12 +154,20 @@ state = fields.Selection([...], index=True)
 company_id = fields.Many2one('res.company', index=True)
 date = fields.Date(index=True)
 
-# Trigram index for ILIKE searches (v16+)
+# Trigram index for ILIKE searches (16.0+)
 name = fields.Char(index='trigram')  # For pattern searches
 
-# Index types (v16+)
+# Index types (16.0+)
 code = fields.Char(index='btree_not_null')  # Exclude NULL values
 ```
+
+| Index form | 14.0-15.0 | 16.0-18.0 | 19.0 |
+|---|---|---|---|
+| `index=True` (btree) | yes (bool only) | yes (`True`/`'btree'`) | yes |
+| `index='btree_not_null'`, `index='trigram'` | - | yes | yes |
+| multi-column / unique index | `init()` + `odoo.tools.create_index` / `create_unique_index` | same | `_my_idx = models.Index('(col1, col2)')` / `models.UniqueIndex(...)` |
+
+Index selectively: every index slows down writes. Index fields used in search domains, record rules and `ORDER BY`, not every field.
 
 ### Index Guidelines
 
@@ -166,7 +223,8 @@ def _compute_partner_orders(self):
             ('partner_id', '=', record.partner_id.id)
         ])
 
-# GOOD: Batch query with read_group
+# GOOD: Batch query with read_group (14.0-18.0 dict API; 17.0+ prefer _read_group,
+# see "Batch ORM Calls" above; read_group is deprecated in 19.0)
 @api.depends('partner_id')
 def _compute_partner_orders(self):
     if not self:
@@ -197,14 +255,15 @@ Use raw SQL for:
 ### Version-Specific SQL Patterns
 
 ```python
-# v14-v17: String SQL (works but deprecated in v18+)
+# All versions 14-19: string SQL with parameters (never %, .format, f-strings or +)
 self.env.cr.execute("""
     UPDATE sale_order
     SET state = %s
     WHERE id IN %s
 """, ('done', tuple(order_ids)))
 
-# v18+: SQL() builder (REQUIRED in v19)
+# 17.0+: odoo.tools.SQL builder (composable; SQL.identifier() for dynamic names).
+# Not available in 14.0-16.0 - in 16.0 `odoo.tools.SQL` is psycopg2's sql.SQL, a different API.
 from odoo.tools import SQL
 
 self.env.cr.execute(SQL(
@@ -235,14 +294,17 @@ results = self.env.cr.dictfetchall()
 ### Cache Invalidation After SQL
 
 ```python
+# Before raw SQL: flush pending ORM writes (flush API differs per version - see model-patterns-<version>)
 # After raw SQL updates, invalidate ORM cache
-self.env.cr.execute(SQL(...))
 
-# Invalidate specific records
-self.browse(updated_ids).invalidate_recordset()
+# 16.0+
+self.browse(updated_ids).invalidate_recordset()   # specific records
+self.invalidate_model()                            # whole model
+self.env.invalidate_all()                          # everything
 
-# Or invalidate entire model cache
-self.invalidate_model()
+# 14.0-15.0
+self.browse(updated_ids).invalidate_cache()
+self.invalidate_cache()
 ```
 
 ## Prefetching
@@ -250,8 +312,9 @@ self.invalidate_model()
 ### Understanding Prefetch
 
 ```python
-# Odoo automatically prefetches in batches of 1000
-# When you access a field on one record, it fetches for all in recordset
+# Odoo automatically prefetches in batches of up to 1000 records (PREFETCH_MAX, all versions)
+# When you access a field on one record, it fetches for all in recordset.
+# Records browsed together share one prefetch set: browse(ids) once, never browse(id) per loop step.
 
 orders = self.env['sale.order'].search([], limit=500)
 
@@ -261,7 +324,7 @@ for order in orders:
     print(order.partner_id.name)  # First iteration: 1 query for all partners
 
 # Manual prefetch for related records
-orders.mapped('order_line_ids.product_id')  # Prefetch all products
+orders.mapped('order_line.product_id')  # Prefetch all products
 ```
 
 ### Prefetch Groups
@@ -271,12 +334,12 @@ orders.mapped('order_line_ids.product_id')  # Prefetch all products
 def process_orders(self, orders):
     # Prefetch all related data upfront
     orders.mapped('partner_id')
-    orders.mapped('order_line_ids')
-    orders.mapped('order_line_ids.product_id')
+    orders.mapped('order_line')
+    orders.mapped('order_line.product_id')
 
     # Now process without additional queries
     for order in orders:
-        for line in order.order_line_ids:
+        for line in order.order_line:
             print(line.product_id.name)  # No additional queries
 ```
 
@@ -284,17 +347,24 @@ def process_orders(self, orders):
 
 ### Use filtered() Efficiently
 
+Official guideline (all versions): put conditions in the **search domain**, not in `filtered()` on the result - `filtered` runs in Python on records already fetched. Reserve `filtered()` for predicates a domain cannot express or for small recordsets already in memory.
+
 ```python
-# filtered() is in-memory, not a database query
-# Good for small recordsets already loaded
+# BAD: fetch everything, filter in Python
+orders = self.env['sale.order'].search([('partner_id', '=', partner.id)])
 confirmed_orders = orders.filtered(lambda o: o.state == 'sale')
 
-# For large datasets, use search() instead
+# GOOD: let the database filter
 confirmed_orders = self.env['sale.order'].search([
-    ('id', 'in', orders.ids),
+    ('partner_id', '=', partner.id),
     ('state', '=', 'sale'),
 ])
+
+# OK: recordset already loaded, predicate in memory
+confirmed_orders = orders.filtered(lambda o: o.state == 'sale')
 ```
+
+Reduce complexity: pre-map results into a dict (`{r.id: r for r in records}`) instead of nested loops; use `set` (or recordset arithmetic like `records - invalid`) for membership tests.
 
 ### Use mapped() for Collections
 
@@ -351,12 +421,28 @@ def _cron_process_large_dataset(self):
             except Exception as e:
                 _logger.error("Failed to process %s: %s", record.id, e)
 
-        # Commit batch and clear cache
+        # Commit batch and clear cache (cron context only; never commit in business code
+        # or tests). Cache clearing: 16.0+ self.env.invalidate_all(); 14.0-15.0 self.invalidate_cache()
         self.env.cr.commit()
         self.env.invalidate_all()
 
         offset += batch_size
 ```
+
+### Savepoints for per-record error isolation
+
+A failed SQL statement aborts the whole transaction. To survive one bad record in a batch, wrap it in a savepoint instead of catching the exception bare (all versions 14-19):
+
+```python
+for record in records:
+    try:
+        with self.env.cr.savepoint():
+            record._process_single()
+    except UserError as e:
+        _logger.warning("Record %s skipped: %s", record.id, e)
+```
+
+Each savepoint costs a round-trip; do not open one per record in very large loops when errors are not expected - process in chunks instead. (Opening very many savepoints in one transaction degrades PostgreSQL performance.)
 
 ## Memory Optimization
 
@@ -372,7 +458,7 @@ def process_many_records(self):
         record._do_processing()
         count += 1
 
-        # Clear cache periodically
+        # Clear cache periodically (16.0+; 14.0-15.0: self.invalidate_cache())
         if count % batch_size == 0:
             self.env.invalidate_all()
             self.env.cr.commit()  # Optional: commit in batches
@@ -402,33 +488,30 @@ for record in self._iter_records([('state', '=', 'pending')]):
 
 ## Version-Specific Optimizations
 
-### v16+ Command Class Performance
+### Batch x2many Line Creation (15.0+ Command; 14.0 tuples)
 
 ```python
-# Command class is slightly more efficient than tuples
+# One write creating all lines (Command is an IntEnum: same cost as tuples)
 from odoo.fields import Command
 
-# Efficient batch line creation
 self.write({
     'line_ids': [Command.create(vals) for vals in vals_list]
 })
+# 14.0: [(0, 0, vals) for vals in vals_list]
 ```
 
-### v18+ Multi-Company Optimization
+### Multi-Company (all versions 14-19)
 
 ```python
 class MyModel(models.Model):
     _name = 'my.model'
-    _check_company_auto = True  # Automatic company checking
+    _check_company_auto = True  # Opt-in consistency check on create/write
 
     company_id = fields.Many2one('res.company', index=True)
     partner_id = fields.Many2one('res.partner', check_company=True)
-
-    # Company-aware search (v18 pattern)
-    def _search_company_records(self):
-        # Uses allowed_company_ids automatically
-        return self.search([('state', '=', 'active')])
 ```
+
+Company filtering of searches comes from the multi-company record rule (`company_ids`), so index `company_id`.
 
 ## Performance Monitoring
 
@@ -459,12 +542,18 @@ def _performance_critical_method(self):
 # In odoo.conf: log_level = debug_sql
 
 # Or use the profiler
+# 14.0 only: decorator
 from odoo.tools.profiler import profile
 
 @profile
 def slow_method(self):
-    # This will log timing and query count
     pass
+
+# 15.0+: no `profile` decorator - use the Profiler context manager
+from odoo.tools.profiler import Profiler
+
+with Profiler():
+    records.slow_method()
 ```
 
 ## Performance Checklist
@@ -480,7 +569,8 @@ def slow_method(self):
 ### For Performance-Critical Code
 - [ ] Profile before optimizing
 - [ ] Consider raw SQL for bulk operations
-- [ ] Use read_group for aggregations
+- [ ] Use grouped queries for aggregations (`read_group` 14.0-16.0, `_read_group` 17.0+)
+- [ ] No ORM call (`search`, `search_count`, aggregates, `create`) inside a loop
 - [ ] Implement batch processing for large datasets
 - [ ] Clear cache in long-running operations
 - [ ] Use generators for memory efficiency

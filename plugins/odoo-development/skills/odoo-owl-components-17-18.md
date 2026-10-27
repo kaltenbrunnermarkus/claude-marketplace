@@ -145,6 +145,16 @@ setup() {
 }
 ```
 
+## Official guideline deltas 17.0 -> 18.0
+
+Only the official-guideline web rules (Odoo `skills/`, verified against both sources) that change between the two versions:
+
+| Topic | 17.0 | 18.0 |
+|-------|------|------|
+| HTML helpers | `htmlEscape`/`markup` from `@odoo/owl`, `escape` from `@web/core/utils/strings`; no `@web/core/utils/html` | adds `@web/core/utils/html`: `htmlEscape` (keeps `Markup` values), `isHtmlEmpty`, `setElementContent` (sets `innerHTML` only for `markup()` values, otherwise `textContent`) |
+
+Unchanged in both: Owl 2 without `computed` (use getters / `useState`), `patch(target, extension)` with `super`, organize code by feature, SCSS `o_<module>` classes and assets via the manifest `assets` key.
+
 ## Migration Checklist
 
 - [ ] Add JSDoc type annotations (recommended)

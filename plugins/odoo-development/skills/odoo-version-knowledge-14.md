@@ -3,7 +3,7 @@
 ```
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║  ODOO 14.0 KNOWLEDGE BASE                                                    ║
-║  Last LTS with @api.multi and track_visibility                               ║
+║  @api.multi already removed; tracking=True; Owl 1.4.11 bundled              ║
 ║  Released: October 2020                                                      ║
 ║  VERIFY: https://github.com/odoo/odoo/tree/14.0                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
@@ -17,7 +17,7 @@
 | Python | 3.6, 3.7, 3.8 |
 | PostgreSQL | 10, 11, 12 |
 | Frontend | Legacy JS + QWeb |
-| OWL | Not available |
+| OWL | Owl 1.4.11 bundled (`web/static/lib/owl`), used by a few core components; custom UI is mostly legacy widgets |
 | Support | Community: Ongoing, Enterprise: Extended |
 
 ## Key Features
@@ -37,28 +37,27 @@
 - Jinja2 2.10
 - lxml 4.2
 
-## Deprecated Features (Still Working)
+## Removed / Deprecated Features
 
-### @api.multi Decorator
+### @api.multi Decorator (REMOVED - already absent in 14.0)
 ```python
-# DEPRECATED but works in v14
-@api.multi
-def action_confirm(self):
-    for record in self:
-        pass
+# FAILS in v14: odoo.api has no attribute 'multi' (removed in 13.0)
+# @api.multi
+# def action_confirm(self): ...
 
-# PREFERRED (implicit multi)
+# CORRECT (methods are multi-record by default)
 def action_confirm(self):
     for record in self:
         pass
 ```
 
-### track_visibility
+### track_visibility (legacy, still honoured with a warning)
 ```python
-# DEPRECATED but works in v14
+# LEGACY: mail.thread still tracks it, but the field setup logs
+# "unknown parameter 'track_visibility'" (only 'tracking' is a valid parameter)
 state = fields.Selection(..., track_visibility='onchange')
 
-# PREFERRED
+# CORRECT in v14
 state = fields.Selection(..., tracking=True)
 ```
 
@@ -74,11 +73,10 @@ class MyModel(models.Model):
 
     name = fields.Char(required=True, tracking=True)
 
-    # track_visibility still works
     state = fields.Selection([
         ('draft', 'Draft'),
         ('done', 'Done'),
-    ], track_visibility='onchange')  # or tracking=True
+    ], tracking=True)  # track_visibility='onchange' still tracks but logs a warning
 
     company_id = fields.Many2one(
         'res.company',
@@ -117,12 +115,16 @@ def create_with_lines(self):
 
 ### Create Method
 ```python
-# v14: Single record create is standard
-@api.model
-def create(self, vals):
-    if not vals.get('code'):
-        vals['code'] = self.env['ir.sequence'].next_by_code('my.model')
-    return super(MyModel, self).create(vals)
+# v14: BaseModel.create is already @api.model_create_multi
+@api.model_create_multi
+def create(self, vals_list):
+    for vals in vals_list:
+        if not vals.get('code'):
+            vals['code'] = self.env['ir.sequence'].next_by_code('my.model')
+    return super().create(vals_list)
+
+# A legacy `@api.model def create(self, vals)` override still works in 14.0
+# (silently wrapped, no warning) but creates records one by one.
 ```
 
 ## Frontend Development
@@ -193,7 +195,7 @@ access_my_model_manager,my.model.manager,model_my_model,my_module.group_manager,
     <field name="domain_force">[
         '|',
         ('company_id', '=', False),
-        ('company_id', 'child_of', [user.company_id.id])
+        ('company_id', 'in', company_ids)
     ]</field>
 </record>
 ```
@@ -240,41 +242,77 @@ Long description here.
 3. Improved mail templates
 4. Better search panels
 
-### Deprecated in v14
-- `@api.multi` (use implicit iteration)
-- `track_visibility` (use `tracking=True`)
+### Removed / legacy in v14
+- `@api.multi` / `@api.one`: already removed (since 13.0) - fails with AttributeError
+- `track_visibility`: legacy; still tracked by `mail.thread` but logs "unknown parameter" - use `tracking=True`
 - `oldname` parameter (use direct migration)
 
 ## Preparing for v15 Upgrade
 
 ### Code Changes Needed
 ```python
-# 1. Remove @api.multi decorators
-# Before (v14)
-@api.multi
-def action_confirm(self):
-    pass
-
-# After (v15)
-def action_confirm(self):
-    pass
-
-# 2. Replace track_visibility
-# Before
-state = fields.Selection(..., track_visibility='onchange')
-
-# After
-state = fields.Selection(..., tracking=True)
+# 1. Manifest: move JS/SCSS from XML asset templates and the 'qweb' key
+#    to the 15.0 'assets' manifest key
+# 2. x2many commands may use `Command` (15.0+); tuples keep working
+# 3. Server QWeb: prefer t-out (15.0+) over t-esc; t-raw is deprecated in 15.0
+# 4. Clean-up that is already valid in 14 (do it before migrating):
+state = fields.Selection(..., tracking=True)   # not track_visibility
 ```
 
 ### View Changes Needed
 - No immediate view changes required for v15
 - Consider using `tracking=True` in fields
 
+## Official Odoo Guidelines (verified for 14.0)
+
+These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 14.0 source; master-only APIs are translated to the 14.0 equivalent or marked as not available.
+
+### API availability in 14.0 vs master
+
+| Topic | 14.0 | Use in 14.0 |
+|-------|------|-------------|
+| `Command` class | absent | tuples `(0, 0, vals)`, `(1, id, vals)`, `(2, id)`, `(3, id)`, `(4, id)`, `(5,)`, `(6, 0, ids)` |
+| `_allow_sudo_commands` | exists | set `False` on security-sensitive comodels |
+| `sudo(user)` | deprecated (warns) | `with_user(user)`; `sudo()` / `sudo(False)` only toggle superuser |
+| `odoo.tools.SQL`, `SQL.identifier` | absent | parameters in `cr.execute(q, params)`; identifiers via `psycopg2.sql.Identifier` |
+| `_search()` | returns `Query` (or `[]`/int) | `query.select('"table"."col"')` -> `(sql, params)` |
+| `fields.Domain` | absent | `odoo.osv.expression.AND/OR/normalize_domain` |
+| `@api.private` | absent | prefix the method with `_` (RPC guard `check_method_name` blocks `_*` names and `init`) |
+| route `auth` | `user`, `public`, `none` | no `bearer` |
+| route `type` | `http`, `json` | no `jsonrpc`/`json2` |
+| route override without `@http.route` | URL silently dropped | always re-decorate (`@http.route()` keeps the parent args) |
+| server QWeb `t-out` | absent (unknown directive error) | `t-esc` escapes; `t-raw` outputs raw HTML |
+| `_()` escapes Markup args | no | escape user input yourself (`odoo.tools.html_escape`) |
+| Owl | 1.4.11 (no `markup`, `htmlEscape`, `computed`) | legacy widgets, `t-esc` in JS QWeb |
+| `fields.NO_ACCESS` (`'.'`) | exists | `groups=fields.NO_ACCESS` or `groups='base.group_system'` |
+| restricted `odoo.tools.misc.pickle` | exists | prefer JSON anyway |
+| `odoo.tools.consteq` | exists | constant-time secret comparison |
+| `base.group_everyone` | absent | an ACL row with empty `group_id` applies to everyone |
+| `ir.access` | absent | `ir.model.access` + `ir.rule` |
+| ir.rule eval context | `user`, `time`, `company_ids`, `company_id` | not `allowed_company_ids` |
+| `recordset.grouped()` | absent | `odoo.tools.groupby()` or a dict of recordsets |
+| `@api.model_create_multi` | exists, used by `BaseModel.create` | single-dict `@api.model` create is wrapped silently |
+| `models.Constraint/Index/UniqueIndex` | absent | `_sql_constraints`; extra indexes in `init()` |
+| field `index=` | boolean only | no `'btree_not_null'`/`'trigram'` |
+| `read_group` / `_read_group` | `read_group(domain, fields, groupby, lazy=True)` -> list of dicts | no `_read_group(domain, groupby, aggregates)` |
+| `self.env._`, `LazyTranslate` | absent | `from odoo import _, _lt` |
+| manifest `base` injection | no | list real dependencies (`base` if nothing else) |
+| manifest `assets` key | absent | inherit `web.assets_backend`/`web.assets_frontend` templates in XML; JS QWeb in `'qweb'` |
+| `<asset>` XML tag | absent | `<template inherit_id="web.assets_backend">` |
+| `t-lang` without `t-call` | silently ignored | only use `t-lang` on a `t-call` node |
+| default test tags | `standard`, `at_install` | post-install: `@tagged('post_install', '-at_install')` |
+| `SavepointCase` | exists (class-level fixtures) | `TransactionCase` has no `cls.env` in 14.0 |
+| `BaseCommon`, `BaseUsersCommon` | absent | `TransactionCaseWithUserDemo`, `SavepointCaseWithUserDemo`, `new_test_user` |
+| imported TestCase class / inherited `test_*` methods | both collected again | do not import concrete test classes into test files |
+
+### Master/20.0-only things an agent must NOT use in 14.0
+
+`Command`, `odoo.tools.SQL`, `fields.Domain`, `@api.private`, `auth='bearer'`/`bearer_scope`, route types `jsonrpc`/`json2`, `t-out`, Owl `markup`/`htmlEscape`/`computed`, `@web/core/utils/html`, `ir.access` / `security/ir.access.csv`, `base.group_everyone`, `grouped()`, `models.Constraint`/`Index`/`UniqueIndex`, string `index=` values, `_read_group(domain, groupby, aggregates)`, `self.env._`, `LazyTranslate`, manifest `assets` key, `<asset>` tag, `BaseCommon`, `allow_inherited_tests_method`, `populate.blueprint`, `--unsafe-policy`.
+
 ## Best Practices for v14
 
 1. **Use tracking=True** instead of track_visibility
-2. **Don't use @api.multi** explicitly
+2. **Don't use @api.multi** (it does not exist in 14.0)
 3. **Use self.env.company** instead of self.env.user.company_id
 4. **Test with Python 3.8** for forward compatibility
 5. **Document deprecated patterns** in your code
