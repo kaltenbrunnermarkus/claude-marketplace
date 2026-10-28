@@ -61,6 +61,8 @@ Review existing security configuration for:
 5. Hardcoded IDs
 6. Missing multi-company rules
 
+For the code sweep, follow the **Security Audit Sweep** table in `skills/odoo-security-guide-all.md`: sweep every pattern (sudo, SQL, domains, public methods, routes, XSS sinks, secrets, `open`, `eval`, `pickle`, `getattr`, token comparison, mutable defaults), judge each hit against its rule, and use the per-version form given there. The audit is complete when every pattern is swept and every hit judged.
+
 ## Execution Flow
 
 ### Step 1: Determine Action and Version
@@ -171,9 +173,6 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 _check_company_auto = True  # available in 14.0-19.0
 partner_id = fields.Many2one('res.partner', check_company=True)
 ```
-
-### Audit
-For `audit`, follow the **Security Audit Sweep** table in `skills/odoo-security-guide-all.md`: sweep every pattern (sudo, SQL, domains, public methods, routes, XSS sinks, secrets, `open`, `eval`, `pickle`, `getattr`, token comparison, mutable defaults), judge each hit against its rule, and use the per-version form given there. The audit is complete when every pattern is swept and every hit judged.
 
 ## Example Usage
 

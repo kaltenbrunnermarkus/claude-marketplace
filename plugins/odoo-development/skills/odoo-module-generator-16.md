@@ -35,6 +35,8 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
 
+`data` loads in list order (groups before ACL CSV before views before menus); `demo` is loaded as noupdate.
+
 ## __manifest__.py Template (v16)
 
 ```python
@@ -71,6 +73,13 @@
     'auto_install': False,
 }
 ```
+
+Manifest facts (16.0, `odoo/modules/module.py`):
+- `depends`: list direct dependencies only. 16.0 does NOT inject `base` for an empty list - write `'depends': ['base']` when there is no other dependency.
+- `license`: if missing, defaults to `LGPL-3` with a WARNING - always set it.
+- `auto_install`: `True` (all `depends`) or a list that must be a subset of `depends` (asserted).
+- `assets`: the manifest key exists (`'web.assets_backend'`, `'web.assets_frontend'`, ...); there is no `<asset>` XML tag in 16.0.
+- `external_dependencies`: `{'python': [...], 'bin': [...]}`; `application: True` only for full apps.
 
 ## Model Template (v16)
 
@@ -313,6 +322,8 @@ registry.category("actions").add("{module_name}.{component_name}", {ComponentNam
 
 ## Security Templates (v16)
 
+Files: `security/ir.model.access.csv` (the CSV file name selects the model; there is no `ir.access.csv` in 16.0) and `security/<module>_security.xml` (groups, rules).
+
 ### ir.model.access.csv
 
 ```csv
@@ -354,21 +365,12 @@ access_{model_name}_manager,{model_name}.manager,model_{module_name}_{model_name
 </odoo>
 ```
 
-## Official Odoo Guidelines (verified for 16.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 16.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 16.0 source; master-only APIs are translated to the 16.0 equivalent or marked as not available.
 
-### Manifest facts (16.0, `odoo/modules/module.py`)
-- `depends`: list direct dependencies only. 16.0 does NOT inject `base` for an empty list - write `'depends': ['base']` when there is no other dependency.
-- `license`: if missing, defaults to `LGPL-3` with a WARNING - always set it.
-- `auto_install`: `True` (all `depends`) or a list that must be a subset of `depends` (asserted).
-- `assets`: the manifest key exists (`'web.assets_backend'`, `'web.assets_frontend'`, ...); there is no `<asset>` XML tag in 16.0.
-- `external_dependencies`: `{'python': [...], 'bin': [...]}`; `application: True` only for full apps.
-- `data` loads in list order (groups before ACL CSV before views before menus); `demo` is loaded as noupdate.
-
 ### Structure and naming
-- One model per file named after the model (`models/sale_order.py`); views `views/<model>_views.xml`, `views/<module>_menus.xml`, QWeb `views/<model>_templates.xml`, data `data/<module>_data.xml`, demo `demo/<module>_demo.xml`.
-- Security: `security/ir.model.access.csv` (the CSV file name selects the model; there is no `ir.access.csv` in 16.0) and `security/<module>_security.xml` (groups, rules).
+- One model per file named after the model (`models/sale_order.py`); views `views/<model>_views.xml`, `views/<module>_menus.xml`, QWeb `views/<model>_templates.xml`, data `data/<module>_data.xml`, demo `demo/<module>_demo.xml`. Security files: see Security Templates.
 - Controllers: `controllers/<feature>.py` or `controllers/<inherited_module>.py` (`main.py` is legacy). Reports: SQL-view model `report/<model>_report.py`; printable reports `report/<model>_reports.xml` + `report/<model>_templates.xml`.
 - Optional `populate/` directory for the 16.0 populate framework.
 - XML ids: `<model>_view_form|tree|search`, `<model>_action`, `<model>_menu`, `<module>_group_<name>`, `<model>_rule_<group>`; in `<record>` put `id` before `model`; `name` first among the fields. `<data noupdate="1">` or `<odoo noupdate="1">` for data the user may edit. `active="False"` on `<template>` is applied on install only.

@@ -17,7 +17,7 @@
 | Python | 3.6, 3.7, 3.8 |
 | PostgreSQL | 10, 11, 12 |
 | Frontend | Legacy JS + QWeb |
-| OWL | Owl 1.4.11 bundled (`web/static/lib/owl`), used by a few core components; custom UI is mostly legacy widgets |
+| OWL | Owl 1.4.11 bundled (`web/static/lib/owl`; no `markup`, `htmlEscape`, `computed`), used by a few core components; custom UI is mostly legacy widgets with `t-esc` in JS QWeb |
 | Support | Community: Ongoing, Enterprise: Extended |
 
 ## Key Features
@@ -86,16 +86,17 @@ class MyModel(models.Model):
 
 ### X2many Commands (Tuple Syntax)
 ```python
-# Standard v14 tuple syntax
+# Standard v14 tuple syntax (the `Command` class does not exist in 14.0)
 def create_with_lines(self):
     self.env['my.model'].create({
         'name': 'Test',
         'line_ids': [
             (0, 0, {'name': 'Line 1'}),  # Create
             (1, id, {'name': 'Updated'}), # Update
-            (2, id, 0),                   # Delete
-            (4, id, 0),                   # Link
-            (5, 0, 0),                    # Clear
+            (2, id, 0),                   # Delete (short form: (2, id))
+            (3, id, 0),                   # Unlink (short form: (3, id))
+            (4, id, 0),                   # Link (short form: (4, id))
+            (5, 0, 0),                    # Clear (short form: (5,))
             (6, 0, [id1, id2]),           # Replace
         ],
     })
@@ -187,7 +188,10 @@ access_my_model_user,my.model.user,model_my_model,base.group_user,1,1,1,0
 access_my_model_manager,my.model.manager,model_my_model,my_module.group_manager,1,1,1,1
 ```
 
+14.0 has no `ir.access` / `security/ir.access.csv`: use `ir.model.access` + `ir.rule`. `base.group_everyone` does not exist: an ACL row with empty `group_id` applies to everyone.
+
 ### Record Rules
+The `domain_force` eval context holds `user`, `time`, `company_ids`, `company_id` (not `allowed_company_ids`).
 ```xml
 <record id="rule_my_model_company" model="ir.rule">
     <field name="name">My Model: Multi-company</field>
@@ -234,6 +238,9 @@ Long description here.
 }
 ```
 
+- `base` is not injected automatically: list real dependencies (`base` if nothing else).
+- No `assets` manifest key and no `<asset>` XML tag: inherit `web.assets_backend`/`web.assets_frontend` with `<template inherit_id="web.assets_backend">` in XML; JS QWeb goes in the `'qweb'` key.
+
 ## Migration from v13
 
 ### Key Changes from v13 to v14
@@ -263,7 +270,7 @@ state = fields.Selection(..., tracking=True)   # not track_visibility
 - No immediate view changes required for v15
 - Consider using `tracking=True` in fields
 
-## Official Odoo Guidelines (verified for 14.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 14.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 14.0 source; master-only APIs are translated to the 14.0 equivalent or marked as not available.
 
@@ -271,7 +278,6 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 
 | Topic | 14.0 | Use in 14.0 |
 |-------|------|-------------|
-| `Command` class | absent | tuples `(0, 0, vals)`, `(1, id, vals)`, `(2, id)`, `(3, id)`, `(4, id)`, `(5,)`, `(6, 0, ids)` |
 | `_allow_sudo_commands` | exists | set `False` on security-sensitive comodels |
 | `sudo(user)` | deprecated (warns) | `with_user(user)`; `sudo()` / `sudo(False)` only toggle superuser |
 | `odoo.tools.SQL`, `SQL.identifier` | absent | parameters in `cr.execute(q, params)`; identifiers via `psycopg2.sql.Identifier` |
@@ -283,22 +289,13 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 | route override without `@http.route` | URL silently dropped | always re-decorate (`@http.route()` keeps the parent args) |
 | server QWeb `t-out` | absent (unknown directive error) | `t-esc` escapes; `t-raw` outputs raw HTML |
 | `_()` escapes Markup args | no | escape user input yourself (`odoo.tools.html_escape`) |
-| Owl | 1.4.11 (no `markup`, `htmlEscape`, `computed`) | legacy widgets, `t-esc` in JS QWeb |
 | `fields.NO_ACCESS` (`'.'`) | exists | `groups=fields.NO_ACCESS` or `groups='base.group_system'` |
 | restricted `odoo.tools.misc.pickle` | exists | prefer JSON anyway |
 | `odoo.tools.consteq` | exists | constant-time secret comparison |
-| `base.group_everyone` | absent | an ACL row with empty `group_id` applies to everyone |
-| `ir.access` | absent | `ir.model.access` + `ir.rule` |
-| ir.rule eval context | `user`, `time`, `company_ids`, `company_id` | not `allowed_company_ids` |
 | `recordset.grouped()` | absent | `odoo.tools.groupby()` or a dict of recordsets |
-| `@api.model_create_multi` | exists, used by `BaseModel.create` | single-dict `@api.model` create is wrapped silently |
 | `models.Constraint/Index/UniqueIndex` | absent | `_sql_constraints`; extra indexes in `init()` |
-| field `index=` | boolean only | no `'btree_not_null'`/`'trigram'` |
 | `read_group` / `_read_group` | `read_group(domain, fields, groupby, lazy=True)` -> list of dicts | no `_read_group(domain, groupby, aggregates)` |
 | `self.env._`, `LazyTranslate` | absent | `from odoo import _, _lt` |
-| manifest `base` injection | no | list real dependencies (`base` if nothing else) |
-| manifest `assets` key | absent | inherit `web.assets_backend`/`web.assets_frontend` templates in XML; JS QWeb in `'qweb'` |
-| `<asset>` XML tag | absent | `<template inherit_id="web.assets_backend">` |
 | `t-lang` without `t-call` | silently ignored | only use `t-lang` on a `t-call` node |
 | default test tags | `standard`, `at_install` | post-install: `@tagged('post_install', '-at_install')` |
 | `SavepointCase` | exists (class-level fixtures) | `TransactionCase` has no `cls.env` in 14.0 |
@@ -322,7 +319,7 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 ### Performance
 - Use `search_read()` instead of `search()` + `read()`
 - Use stored computed fields when possible
-- Index frequently searched fields
+- Index frequently searched fields (`index=True`; in 14.0 `index=` is boolean only, no `'btree_not_null'`/`'trigram'`)
 
 ### Multi-company
 ```python

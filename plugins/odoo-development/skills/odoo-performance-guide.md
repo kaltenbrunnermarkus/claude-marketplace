@@ -7,6 +7,7 @@
 ║  Critical for modules marked as "performance_critical": true                 ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
+> Includes rules from Odoo's official skill library (odoo/odoo skills/, branch 20.0), verified against the 14.0-19.0 source.
 
 ## Performance Principles
 
@@ -64,54 +65,9 @@ for record in records:
 records.unlink()
 ```
 
-### Batch ORM Calls (Official Odoo Guideline, verified for 14.0-19.0)
-
-From Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0), checked against the 14.0-19.0 sources: make **one** ORM call for the whole collection. An ORM call (`search`, `search_count`, aggregates, `create`) inside a `for` loop over records or vals is one query per iteration - O(n) round-trips instead of O(1).
+Make **one** ORM call for the whole collection. An ORM call (`search`, `search_count`, aggregates, `create`) inside a `for` loop over records or vals is one query per iteration - O(n) round-trips instead of O(1). For per-record counts and sums use a grouped query (see "Optimizing Computed Fields").
 
 Exceptions: a loop that only computes in memory on already-read fields is fine; when a per-record call is truly unavoidable (e.g. an external API per record), bound the batch size.
-
-```python
-# BAD (all versions): one aggregate query per author
-for author in authors:
-    author.book_count = Book.search_count([('author_id', '=', author.id)])
-```
-
-The grouped replacement depends on the version:
-
-```python
-# 14.0-16.0 (also works in 17.0-18.0; deprecated in 19.0): read_group -> list of dicts
-groups = Book.read_group(
-    [('author_id', 'in', authors.ids)], ['author_id'], ['author_id'],
-)
-# lazy=True (default): count key is '<groupby>_count'; many2one value is (id, display_name)
-counts = {g['author_id'][0]: g['author_id_count'] for g in groups if g['author_id']}
-for author in authors:
-    author.book_count = counts.get(author.id, 0)
-
-# Sum per group, 14.0-16.0
-groups = Book.read_group(
-    [('author_id', 'in', authors.ids)], ['price:sum'], ['author_id'], lazy=False,
-)
-totals = {g['author_id'][0]: g['price'] for g in groups if g['author_id']}  # count in g['__count']
-```
-
-```python
-# 17.0+: _read_group(domain, groupby, aggregates) -> list of tuples, groupby values are records
-counts = {
-    author.id: count
-    for author, count in Book._read_group(
-        [('author_id', 'in', authors.ids)], ['author_id'], ['__count'],
-    )
-}
-for author in authors:
-    author.book_count = counts.get(author.id, 0)
-
-# Sum per group, 17.0+
-totals = dict(Book._read_group([('author_id', 'in', authors.ids)], ['author_id'], ['price:sum']))
-# keys are author records: totals.get(author, 0.0)
-```
-
-In 16.0 `_read_group` exists but has the **old** `read_group` signature (fields, groupby, lazy) and returns dicts - do not use the 17.0 tuple form there. In 19.0 `read_group` is deprecated; use `_read_group` (or `formatted_read_group` when dicts are needed).
 
 ### Efficient Searching
 
@@ -144,11 +100,6 @@ orders = self.env['sale.order'].search([
 ### When to Index
 
 ```python
-# Index fields that are:
-# 1. Frequently used in search domains
-# 2. Used in record rules
-# 3. Used in ORDER BY clauses
-
 # Standard B-tree index
 state = fields.Selection([...], index=True)
 company_id = fields.Many2one('res.company', index=True)
@@ -215,32 +166,51 @@ def _compute_days_until_deadline(self):
 ### Optimizing Computed Fields
 
 ```python
-# BAD: Individual queries in compute
+# BAD (all versions): one aggregate query per record in compute
 @api.depends('partner_id')
 def _compute_partner_orders(self):
     for record in self:
         record.order_count = self.env['sale.order'].search_count([
             ('partner_id', '=', record.partner_id.id)
         ])
-
-# GOOD: Batch query with read_group (14.0-18.0 dict API; 17.0+ prefer _read_group,
-# see "Batch ORM Calls" above; read_group is deprecated in 19.0)
-@api.depends('partner_id')
-def _compute_partner_orders(self):
-    if not self:
-        return
-
-    partner_ids = self.mapped('partner_id').ids
-    order_data = self.env['sale.order'].read_group(
-        [('partner_id', 'in', partner_ids)],
-        ['partner_id'],
-        ['partner_id'],
-    )
-    counts = {d['partner_id'][0]: d['partner_id_count'] for d in order_data}
-
-    for record in self:
-        record.order_count = counts.get(record.partner_id.id, 0)
 ```
+
+The grouped replacement depends on the version:
+
+```python
+# 14.0-16.0 (also works in 17.0-18.0; deprecated in 19.0): read_group -> list of dicts
+groups = Book.read_group(
+    [('author_id', 'in', authors.ids)], ['author_id'], ['author_id'],
+)
+# lazy=True (default): count key is '<groupby>_count'; many2one value is (id, display_name)
+counts = {g['author_id'][0]: g['author_id_count'] for g in groups if g['author_id']}
+for author in authors:
+    author.book_count = counts.get(author.id, 0)
+
+# Sum per group, 14.0-16.0
+groups = Book.read_group(
+    [('author_id', 'in', authors.ids)], ['price:sum'], ['author_id'], lazy=False,
+)
+totals = {g['author_id'][0]: g['price'] for g in groups if g['author_id']}  # count in g['__count']
+```
+
+```python
+# 17.0+: _read_group(domain, groupby, aggregates) -> list of tuples, groupby values are records
+counts = {
+    author.id: count
+    for author, count in Book._read_group(
+        [('author_id', 'in', authors.ids)], ['author_id'], ['__count'],
+    )
+}
+for author in authors:
+    author.book_count = counts.get(author.id, 0)
+
+# Sum per group, 17.0+
+totals = dict(Book._read_group([('author_id', 'in', authors.ids)], ['author_id'], ['price:sum']))
+# keys are author records: totals.get(author, 0.0)
+```
+
+In 16.0 `_read_group` exists but has the **old** `read_group` signature (fields, groupby, lazy) and returns dicts - do not use the 17.0 tuple form there. In 19.0 `read_group` is deprecated; use `_read_group` (or `formatted_read_group` when dicts are needed).
 
 ## SQL Optimization
 
@@ -314,7 +284,7 @@ self.invalidate_cache()
 ```python
 # Odoo automatically prefetches in batches of up to 1000 records (PREFETCH_MAX, all versions)
 # When you access a field on one record, it fetches for all in recordset.
-# Records browsed together share one prefetch set: browse(ids) once, never browse(id) per loop step.
+# Records browsed together share one prefetch set (see "Avoid Repeated Environment Access").
 
 orders = self.env['sale.order'].search([], limit=500)
 
@@ -390,7 +360,7 @@ for partner_id in partner_ids:
     partner = self.env['res.partner'].browse(partner_id)
     print(partner.name)
 
-# GOOD: Single browse for all
+# GOOD: browse(ids) once, never browse(id) per loop step - one shared prefetch set
 partners = self.env['res.partner'].browse(partner_ids)
 for partner in partners:
     print(partner.name)
@@ -417,7 +387,8 @@ def _cron_process_large_dataset(self):
 
         for record in records:
             try:
-                record._process_single()
+                with self.env.cr.savepoint():  # isolate the failing record, see below
+                    record._process_single()
             except Exception as e:
                 _logger.error("Failed to process %s: %s", record.id, e)
 
@@ -431,16 +402,7 @@ def _cron_process_large_dataset(self):
 
 ### Savepoints for per-record error isolation
 
-A failed SQL statement aborts the whole transaction. To survive one bad record in a batch, wrap it in a savepoint instead of catching the exception bare (all versions 14-19):
-
-```python
-for record in records:
-    try:
-        with self.env.cr.savepoint():
-            record._process_single()
-    except UserError as e:
-        _logger.warning("Record %s skipped: %s", record.id, e)
-```
+A failed SQL statement aborts the whole transaction. To survive one bad record in a batch, wrap it in a savepoint (`with self.env.cr.savepoint():`, as in the cron loop above) instead of catching the exception bare (all versions 14-19).
 
 Each savepoint costs a round-trip; do not open one per record in very large loops when errors are not expected - process in chunks instead. (Opening very many savepoints in one transaction degrades PostgreSQL performance.)
 

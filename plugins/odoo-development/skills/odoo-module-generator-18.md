@@ -7,6 +7,7 @@
 ║  DO NOT use these patterns for other versions.                               ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
+> Includes rules from Odoo's official skill library (odoo/odoo skills/, branch 20.0), verified against the 18.0 source.
 
 ## Version 18.0 Requirements
 
@@ -51,7 +52,7 @@
 │   └── {model_name}.py
 ├── views/
 │   ├── {model_name}_views.xml
-│   └── menuitems.xml
+│   └── {module_name}_menus.xml
 ├── security/
 │   ├── ir.model.access.csv
 │   └── {module_name}_security.xml
@@ -72,14 +73,32 @@
 │   └── {wizard_name}.py
 ├── report/
 │   ├── __init__.py
-│   ├── {report_name}.py
-│   └── {report_name}_template.xml
+│   ├── {model_name}_report.py
+│   ├── {model_name}_reports.xml
+│   └── {model_name}_templates.xml
 ├── tests/
 │   ├── __init__.py
 │   └── test_{model_name}.py
 └── i18n/
     └── {module_name}.pot
 ```
+
+### File and naming conventions
+
+| Item | Convention |
+|------|------------|
+| Models | one main model per file, named after the model: `models/sale_order.py` |
+| Views / menus / templates / data | `views/<model>_views.xml`, `views/<module>_menus.xml`, `views/<model>_templates.xml`, `data/<module>_data.xml`, `demo/<module>_demo.xml` |
+| Security | `security/ir.model.access.csv` + `security/<module>_security.xml` (groups, rules); no `ir.access.csv` in 18 |
+| Controllers | feature-named file or `<inherited_module>.py`; `main.py` is legacy |
+| Reports | SQL-view model `report/<model>_report.py`; printable report split into `report/<model>_reports.xml` (action) and `report/<model>_templates.xml` (QWeb) |
+| Model `_name` | dotted, module-prefixed, singular: `my_module.order`; wizard `<base_model>.<action>`; SQL report `<base_model>.report.<action>` |
+| XML ids | `<model>_view_<type>` (`_view_form`, `_view_list`, `_view_search`), `<model>_action`, `<model>_menu`, `<module>_group_<name>`, `<model>_rule_<group>` |
+| Python | model vars PascalCase (`Partner = self.env['res.partner']`); `_id`/`_ids` variables hold ids, not records |
+| Method prefixes | `_compute_`, `_search_`, `_default_`, `_selection_`, `_onchange_`, `_check_`, `action_` (starts with `self.ensure_one()` when it acts on one record) |
+| Class body order | private attributes (`_name`, `_description`, `_inherit`, `_order`, `_sql_constraints`) -> default methods -> fields -> compute/inverse/search methods -> selection methods -> `@api.constrains`/`@api.onchange` -> CRUD overrides -> actions -> business methods |
+| Imports | stdlib / third-party / `from odoo import Command, _, api, fields, models` / `from odoo.addons...` |
+| CSS | classes prefixed `o_<module>_`, no id selectors |
 
 ## __manifest__.py Template (v18)
 
@@ -96,14 +115,12 @@
     'author': '{Author}',
     'website': '{Website}',
     'license': 'LGPL-3',
-    # Direct dependencies only (mail already depends on base). 18.0 does not
-    # add 'base' automatically: a module without other deps must list ['base'].
-    'depends': ['mail'],
+    'depends': ['mail'],  # direct dependencies only (mail already depends on base)
     'data': [
         'security/{module_name}_security.xml',
         'security/ir.model.access.csv',
         'views/{model_name}_views.xml',
-        'views/menuitems.xml',
+        'views/{module_name}_menus.xml',
     ],
     'assets': {
         'web.assets_backend': [
@@ -119,6 +136,15 @@
 }
 ```
 
+Manifest facts (18.0, `odoo/modules/module.py`):
+
+- `depends`: list direct dependencies only. 18.0 does **not** inject `base` for an empty `depends`; declare `['base']` when the module needs nothing else.
+- `license`: missing key defaults to `LGPL-3` with a warning; always set it explicitly.
+- `auto_install`: `True` (all `depends` installed) or a list that must be a subset of `depends`.
+- `assets`: the manifest key exists (`web.assets_backend`, `web.assets_frontend`, ...); the `<asset>` XML tag also exists.
+- `application: True` only for full apps; `external_dependencies: {'python': [...], 'bin': [...]}`.
+- `data` loads in list order (security groups before `ir.model.access.csv`, views before menus); `demo` only with demo data.
+
 ## Model Template (v18)
 
 ```python
@@ -133,6 +159,10 @@ class {ModelName}(models.Model):
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _order = 'create_date desc'
     _check_company_auto = True  # v18: Automatic company validation
+    _sql_constraints = [
+        ('name_company_uniq', 'UNIQUE(name, company_id)',
+         'Name must be unique per company!'),
+    ]
 
     # === BASIC FIELDS === #
     name = fields.Char(
@@ -206,11 +236,6 @@ class {ModelName}(models.Model):
         for record in self:
             if record.name and len(record.name) < 3:
                 raise ValidationError(_("Name must be at least 3 characters."))
-
-    _sql_constraints = [
-        ('name_company_uniq', 'UNIQUE(name, company_id)',
-         'Name must be unique per company!'),
-    ]
 
     # === CRUD METHODS === #
     @api.model_create_multi
@@ -455,7 +480,7 @@ class {ModelName}Line(models.Model):
           name="{Module Title}"
           sequence="100"/>
 
-<menuitem id="menu_{model_name}"
+<menuitem id="{model_name}_menu"
           name="{Model Title}"
           parent="menu_{module_name}_root"
           action="{model_name}_action"
@@ -468,10 +493,10 @@ class {ModelName}Line(models.Model):
 
 ```csv
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_{model_name}_user,{model_name}.user,model_{module_name}_{model_name},{module_name}.group_{module_name}_user,1,1,1,0
-access_{model_name}_manager,{model_name}.manager,model_{module_name}_{model_name},{module_name}.group_{module_name}_manager,1,1,1,1
-access_{model_name}_line_user,{model_name}.line.user,model_{module_name}_{model_name}_line,{module_name}.group_{module_name}_user,1,1,1,0
-access_{model_name}_line_manager,{model_name}.line.manager,model_{module_name}_{model_name}_line,{module_name}.group_{module_name}_manager,1,1,1,1
+access_{model_name}_user,{model_name}.user,model_{module_name}_{model_name},{module_name}.{module_name}_group_user,1,1,1,0
+access_{model_name}_manager,{model_name}.manager,model_{module_name}_{model_name},{module_name}.{module_name}_group_manager,1,1,1,1
+access_{model_name}_line_user,{model_name}.line.user,model_{module_name}_{model_name}_line,{module_name}.{module_name}_group_user,1,1,1,0
+access_{model_name}_line_manager,{model_name}.line.manager,model_{module_name}_{model_name}_line,{module_name}.{module_name}_group_manager,1,1,1,1
 ```
 
 ### Security Groups XML
@@ -484,21 +509,21 @@ access_{model_name}_line_manager,{model_name}.line.manager,model_{module_name}_{
         <field name="sequence">100</field>
     </record>
 
-    <record id="group_{module_name}_user" model="res.groups">
+    <record id="{module_name}_group_user" model="res.groups">
         <field name="name">User</field>
         <field name="category_id" ref="module_category_{module_name}"/>
     </record>
 
-    <record id="group_{module_name}_manager" model="res.groups">
+    <record id="{module_name}_group_manager" model="res.groups">
         <field name="name">Manager</field>
         <field name="category_id" ref="module_category_{module_name}"/>
-        <field name="implied_ids" eval="[(4, ref('group_{module_name}_user'))]"/>
+        <field name="implied_ids" eval="[(4, ref('{module_name}_group_user'))]"/>
         <field name="users" eval="[(4, ref('base.user_admin'))]"/>
     </record>
 
     <!-- Multi-Company Record Rule: no groups = global rule.
          Eval context is user, time, company_ids, company_id (no allowed_company_ids). -->
-    <record id="rule_{model_name}_company" model="ir.rule">
+    <record id="{model_name}_rule_company" model="ir.rule">
         <field name="name">{Model Name}: Multi-Company</field>
         <field name="model_id" ref="model_{module_name}_{model_name}"/>
         <field name="domain_force">[
@@ -633,38 +658,6 @@ class Test{ModelName}(TransactionCase):
         records = self.env['{module_name}.{model_name}'].with_user(self.user).search([])
         self.assertNotIn(record.id, records.ids)
 ```
-
-## Official Odoo Guidelines (verified for 18.0)
-
-These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 18.0 source; master-only APIs are translated to their 18.0 equivalent or marked as not available.
-
-### Manifest facts (18.0, `odoo/modules/module.py`)
-
-- `depends`: list direct dependencies only. 18.0 does **not** inject `base` for an empty `depends`; declare `['base']` when the module needs nothing else.
-- `license`: missing key defaults to `LGPL-3` with a warning; always set it explicitly.
-- `auto_install`: `True` (all `depends` installed) or a list that must be a subset of `depends`.
-- `assets`: the manifest key exists (`web.assets_backend`, `web.assets_frontend`, ...); the `<asset>` XML tag also exists.
-- `application: True` only for full apps; `external_dependencies: {'python': [...], 'bin': [...]}`.
-- `data` loads in list order (security groups before `ir.model.access.csv`, views before menus); `demo` only with demo data.
-
-### File and naming conventions
-
-| Item | Convention |
-|------|------------|
-| Models | one main model per file, named after the model: `models/sale_order.py` |
-| Views / menus / templates / data | `views/<model>_views.xml`, `views/<module>_menus.xml`, `views/<model>_templates.xml`, `data/<module>_data.xml`, `demo/<module>_demo.xml` |
-| Security | `security/ir.model.access.csv` + `security/<module>_security.xml` (groups, rules); no `ir.access.csv` in 18 |
-| Controllers | feature-named file or `<inherited_module>.py`; `main.py` is legacy |
-| Reports | SQL-view model `report/<model>_report.py`; printable report split into `report/<model>_reports.xml` (action) and `report/<model>_templates.xml` (QWeb) |
-| Model `_name` | dotted, module-prefixed, singular: `my_module.order`; wizard `<base_model>.<action>`; SQL report `<base_model>.report.<action>` |
-| XML ids | `<model>_view_<type>` (`_view_form`, `_view_list`, `_view_search`), `<model>_action`, `<model>_menu`, `<module>_group_<name>`, `<model>_rule_<group>` |
-| Python | model vars PascalCase (`Partner = self.env['res.partner']`); `_id`/`_ids` variables hold ids, not records |
-| Method prefixes | `_compute_`, `_search_`, `_default_`, `_selection_`, `_onchange_`, `_check_`, `action_` (starts with `self.ensure_one()` when it acts on one record) |
-| Class body order | private attributes (`_name`, `_description`, `_inherit`, `_order`, `_sql_constraints`) -> default methods -> fields -> compute/inverse/search methods -> selection methods -> `@api.constrains`/`@api.onchange` -> CRUD overrides -> actions -> business methods |
-| Imports | stdlib / third-party / `from odoo import Command, _, api, fields, models` / `from odoo.addons...` |
-| CSS | classes prefixed `o_<module>_`, no id selectors |
-
-### Generated tests
 
 - Base classes: `odoo.tests.TransactionCase` (each test in a savepoint), `odoo.tests.HttpCase` for HTTP/tours. `odoo.addons.base.tests.common.BaseCommon` disables mail side effects but in 18 still runs as superuser; `BaseUsersCommon` adds `user_internal` / `user_portal`; `new_test_user(env, login, groups=...)` creates users.
 - Default tags in 18.0 are `standard` + `at_install`. Post-install tests (required for `HttpCase`): `@tagged('post_install', '-at_install')`. Both tags -> the test runs twice; neither -> it never runs.

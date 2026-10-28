@@ -10,7 +10,7 @@
 
 ## Version 17.0 OWL Requirements
 
-- **OWL Version**: 2.x (same as v16)
+- **OWL Version**: 2.x (same as v16), bundled in `web/static/lib/owl`. There is **no** `computed` in this Owl version: use plain getters on the component or derive values from `useState`/`reactive` state.
 - **Module System**: ES modules with `/** @odoo-module **/`
 - **View Integration**: Works with new Python expression visibility
 
@@ -234,7 +234,7 @@ export class ConfirmDialog extends Component {
 }
 ```
 
-## Official Odoo Guidelines (verified for 17.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 17.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 17.0 source; master-only APIs are translated to the 17.0 equivalent or marked as not available.
 
@@ -254,7 +254,6 @@ const html = markup(`<b>${htmlEscape(record.name)}</b>`);
 
 ### Owl rules for 17.0
 
-- Owl 2 (bundled in `web/static/lib/owl`). There is **no** `computed` in this Owl version: use plain getters on the component or derive values from `useState`/`reactive` state.
 - `patch(target, extension)` from `@web/core/utils/patch` takes two arguments (a patch name string throws) and returns an unpatch function; use `super.method(...)` inside the extension. In custom addons `patch` is the normal way to extend core components.
 - Organize code by feature (`static/src/<feature>/<feature>.js`, `.xml`, `.scss` side by side), not by file type.
 

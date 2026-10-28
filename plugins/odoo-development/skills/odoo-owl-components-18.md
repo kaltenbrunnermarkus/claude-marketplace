@@ -365,6 +365,8 @@ setup() {
 
 ### State and Reactivity
 
+Owl 2.x (shipped with 18.0) has no `computed` helper. Derive values with getters or compute them in `setup()` / `onWillRender`.
+
 ```javascript
 import { useState, useRef, reactive } from "@odoo/owl";
 
@@ -497,7 +499,11 @@ dialog.add(ConfirmationDialog, {
 },
 ```
 
-## Official Odoo Guidelines (verified for 18.0)
+- Organize `static/src/` by feature (`static/src/dashboard/dashboard.js`, `.xml`, `.scss` side by side), not by file type.
+- SCSS: 4-space indentation, classes prefixed `o_<module>_`, Odoo `$o-...` variables; do not define CSS custom properties on `:root`.
+- All assets ship in the module (no CDN); third-party libraries go unminified under `static/lib/`. Declare files in the manifest `assets` key.
+
+## Additional Rules from Odoo's Official Guidelines (verified for 18.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 18.0 source; master-only APIs are translated to their 18.0 equivalent or marked as not available.
 
@@ -517,9 +523,8 @@ const html = markup`<b>${record.name}</b>`;
 setElementContent(this.rootRef.el, html);  // rootRef = useRef("root")
 ```
 
-### Owl and patching
+### Patching
 
-- Owl 2.x ships with 18.0; it has no `computed` helper. Derive values with getters or compute them in `setup()` / `onWillRender`.
 - `patch(objToPatch, extension)` from `@web/core/utils/patch` takes two arguments (a string second argument throws) and returns an unpatch function; use `super.method(...)` inside the extension. In custom addons `patch()` is the normal extension mechanism.
 
 ```javascript
@@ -533,12 +538,6 @@ patch(FormController.prototype, {
     },
 });
 ```
-
-### Organization and assets
-
-- Organize `static/src/` by feature (`static/src/dashboard/dashboard.js`, `.xml`, `.scss` side by side), not by file type.
-- SCSS: 4-space indentation, classes prefixed `o_<module>_`, Odoo `$o-...` variables; do not define CSS custom properties on `:root`.
-- All assets ship in the module (no CDN); third-party libraries go unminified under `static/lib/`. Declare files in the manifest `assets` key.
 
 ## v18 OWL Checklist
 

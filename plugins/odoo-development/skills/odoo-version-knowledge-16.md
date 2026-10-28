@@ -94,8 +94,8 @@ registry.category("actions").add("my_module.my_action", MyComponent);
 
 ### New in Odoo 16
 - OWL 2.x framework
-- `@api.private` and the `get_public_method` RPC guard
-- `index='btree_not_null'` / `index='trigram'` field indexes
+- `@api.private` (for public names that must not be RPC-callable) and the `get_public_method` RPC guard (blocks `_` prefix, `@api.private`, `_UNSAFE_ATTRIBUTES`; classmethods/staticmethods are NOT blocked: prefix them with `_`)
+- `index='btree_not_null'` / `index='trigram'` field indexes (besides `True`/`'btree'`)
 - Improved Knowledge app
 - Enhanced Spreadsheet
 - Better project management
@@ -206,6 +206,8 @@ def create(self, vals_list):
 ```
 
 ## OWL 2.x Patterns
+
+Owl 2 has no `computed`: use getters or compute in `setup()`.
 
 ### Component with Services
 ```javascript
@@ -391,7 +393,7 @@ def create(self, vals_list):
 }
 ```
 
-## Official Odoo Guidelines (verified for 16.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 16.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 16.0 source; master-only APIs are translated to the 16.0 equivalent or marked as not available.
 
@@ -401,13 +403,10 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 |---|---|---|
 | `sudo(user)` | absent (bool only) | `with_user(user)` |
 | `_allow_sudo_commands` | exists | set `False` on security-sensitive comodels |
-| `Command` / `from odoo import Command` | exists | `Command.create(...)` (tuples still accepted) |
 | `related_sudo` default `True` | same as master | `related_sudo=False` on sensitive chains |
 | `odoo.tools.SQL` builder, `SQL.identifier` | different: `odoo.tools.SQL` is `psycopg2.sql.SQL` | `cr.execute(query, params)`; identifiers via `psycopg2.sql.Identifier` |
 | `_search()` + `Query.select(SQL(...))` | different | `query = M._search(dom)` -> `Query` (or `[]`); `sql, params = query.select('"t"."id"')` |
 | `odoo.fields.Domain` | absent | `odoo.osv.expression.AND/OR/normalize_domain` |
-| `@api.private` | exists | for public names that must not be RPC-callable |
-| RPC guard | `get_public_method`: `_` prefix, `@api.private`, `_UNSAFE_ATTRIBUTES` | classmethods/staticmethods are not blocked: prefix with `_` |
 | route `auth` | `user`, `public`, `none` | no `bearer` |
 | route `type` | `http`, `json` | no `jsonrpc` / `json2` |
 | QWeb `t-out` / `t-esc` / `t-raw` | `t-out` escapes; `t-esc` = alias; `t-raw` still renders unescaped (deprecated) | use `t-out` |
@@ -419,20 +418,17 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 | `grouped()` | absent | `odoo.tools.groupby(records, key)` |
 | `_read_group(domain, groupby, aggregates)` tuples | different | `read_group(domain, fields, groupby, lazy=...)` -> list of dicts |
 | `models.Constraint` / `Index` / `UniqueIndex` | absent | `_sql_constraints`; indexes via `index=` or `tools.create_index()` in `init()` |
-| field `index` values | `True`/`'btree'`, `'btree_not_null'`, `'trigram'` | same as master |
 | manifest `base` injection for empty `depends` | absent | declare `'depends': ['base']` |
 | `<asset>` XML tag | absent | manifest `'assets'` key |
 | `t-lang` without `t-call` | SyntaxError (same as master) | put `t-lang` on the `t-call` node |
-| view modifiers | `attrs` / `states` | expressions only from 17.0 |
 | default test tags | `standard`, `at_install` | post-install: `@tagged('post_install', '-at_install')` |
 | `allow_inherited_tests_method` | absent | inherited `test_*` methods ARE collected; keep shared code in non-`test_` mixins |
 | `BaseCommon` | exists (USD, mail-disabled context, `cls.partner`, still superuser) | `BaseUsersCommon` for `user_internal`/`user_portal` |
-| Owl | Owl 2 (no `computed`) | getters / compute in `setup()` |
 | JS `patch` | `patch(obj, "name", ext)`, `this._super(...)` | not `patch(obj, ext)` / `super` (17.0+) |
 | JS escape helpers | `htmlEscape`, `markup` (`@odoo/owl`), `escape` (`@web/core/utils/strings`) | no `@web/core/utils/html` |
 
 ### Master/20.0-only - do NOT use in 16.0
-`odoo.tools.SQL(...)`-style queries and `SQL.identifier`, `fields.Domain`, `self.env._`, `LazyTranslate`, `records.grouped()`, `_read_group(domain, groupby, aggregates)`, `models.Constraint/Index/UniqueIndex`, `ir.access` / `security/ir.access.csv`, `auth='bearer'` / `bearer_scope`, route types `jsonrpc`/`json2`, `<asset>` records, `allow_inherited_tests_method`, Owl `computed`, `@web/core/utils/html`, `patch(obj, ext)` without a name, direct `invisible="<python expr>"`.
+Everything marked absent/different above (including `auth='bearer'` / `bearer_scope`, `security/ir.access.csv`, Owl `computed`), and direct `invisible="<python expr>"` (see Common Issues).
 
 ## Common Issues
 

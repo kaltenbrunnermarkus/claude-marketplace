@@ -7,6 +7,7 @@
 ║  Verified against the 18.0 and 19.0 (final) source trees.                    ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
+> Includes rules from Odoo's official skill library (odoo/odoo skills/, branch 20.0), verified against the 18.0 and 19.0 source.
 
 ## Changes Summary
 
@@ -14,9 +15,13 @@
 |---------|-----|-----|
 | Owl version | 2.x | 2.8.4 (`addons/web/static/lib/owl/owl.js`) |
 | Component API, hooks, props validation | Owl 2 | Owl 2 (unchanged) |
-| `@web/core/utils/html` helpers | `htmlEscape`, `setElementContent`, `isHtmlEmpty` | + `htmlJoin`, `htmlSprintf`, `htmlReplace`, `htmlFormatList`, `createElementWithContent`, ... |
-| `patch(obj, extension)` | yes | yes |
-| Owl `computed` | not available | not available |
+| `@web/core/utils/html` helpers | `htmlEscape`, `setElementContent`, `isHtmlEmpty` | + `htmlJoin`, `htmlSprintf`, `htmlReplace`/`htmlReplaceAll`, `htmlFormatList`, `htmlTrim`, `isMarkup`, `createElementWithContent`, `createDocumentFragmentFromContent` |
+| `setInnerHtml` | not available (use `setElementContent`) | not available (use `setElementContent`) |
+| `markup` as tagged template escaping placeholders (``markup`<b>${name}</b>` ``) | yes | yes |
+| `patch(objToPatch, extension)` with `super` | yes | yes |
+| Owl `computed` | not available (derive values with getters) | not available (derive values with getters) |
+| User info | `user` from `@web/core/user` (no `user` service) | same |
+| Assets | organize `static/src` by feature; declare in manifest `assets` key | same |
 
 The sections below are style recommendations (JSDoc, cleanup, defaultProps); all of them
 already work in v18.
@@ -284,16 +289,6 @@ this.props.onSelect?.(selectedId);
 /** @type {ComponentState} */
 this.state = useState({...});
 ```
-
-## Official guideline deltas 18.0 -> 19.0
-
-Only the web rows of the verified official-guideline matrix that change between 18.0 and 19.0:
-
-| Topic | 18.0 | 19.0 |
-|-------|------|------|
-| `@web/core/utils/html` | `htmlEscape`, `setElementContent`, `isHtmlEmpty` | + `htmlJoin`, `htmlSprintf`, `htmlReplace`/`htmlReplaceAll`, `htmlFormatList`, `htmlTrim`, `isMarkup`, `createElementWithContent`, `createDocumentFragmentFromContent` |
-
-Unchanged: Owl 2 (no `computed`; derive values with getters), `markup` usable as a tagged template that escapes placeholders (``markup`<b>${name}</b>` ``) in both, `patch(objToPatch, extension)` with `super`, no `setInnerHtml` (use `setElementContent`), organize `static/src` by feature, assets declared in the manifest `assets` key, `user` from `@web/core/user` (no `user` service).
 
 ## Optional Style Checklist
 

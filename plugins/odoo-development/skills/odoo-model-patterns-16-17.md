@@ -128,10 +128,11 @@ Only ORM rules of the official Odoo guidelines (odoo/odoo `skills/`, verified pe
 | Custom SQL over ORM rows | `query = M._search(dom)`; `sql, params = query.select('"t"."id"')` | `M._search(dom).select(SQL(...))` with `odoo.tools.SQL` |
 | Dynamic SQL identifiers | `psycopg2.sql.Identifier` | `SQL.identifier(name)` |
 | Translations | `_()` with `%` args, no Markup escaping | `_()` escapes args when one is Markup; `tools.format_list` |
-| View modifiers | `attrs` / `states` | Python expressions |
 | `<asset>` XML records | absent | exists |
 
-Unchanged (16.0 = 17.0): `_sql_constraints` (no `models.Constraint`), `index` values `btree`/`btree_not_null`/`trigram`, `osv.expression.AND/OR`, related through x2many truncates to the first record, `default_<field>` context leak, `t-lang` only with `t-call`, custom `_get_report_values` must return `docs`/`doc_ids`/`doc_model`, `cr.savepoint()`, single-dict create WARNING.
+View modifiers and the single-dict create WARNING: see Breaking Changes Summary.
+
+Unchanged (16.0 = 17.0): `_sql_constraints` (no `models.Constraint`), `index` values `btree`/`btree_not_null`/`trigram`, `osv.expression.AND/OR`, related through x2many truncates to the first record, `default_<field>` context leak, `t-lang` only with `t-call`, custom `_get_report_values` must return `docs`/`doc_ids`/`doc_model`, `cr.savepoint()`.
 
 ## Common Errors and Fixes
 

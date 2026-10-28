@@ -6,6 +6,7 @@
 ║  Use this guide when upgrading security code from v14 to v15.                ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
+> Includes rules from Odoo's official skill library (odoo/odoo skills/, branch 20.0), verified against the 14.0 and 15.0 source.
 
 ## Overview of Security Changes
 
@@ -13,8 +14,8 @@
 |-----------|-----|-----|-------------------|
 | @api.multi | Removed (since 13.0) | Removed | Only for code ported from <= 12.0 |
 | Field tracking | `tracking` (`track_visibility` legacy, warns) | same | Clean-up recommended |
-| Server QWeb output | `t-esc` (escapes) / `t-raw` (raw) | `t-out`; `t-esc` alias; `t-raw` deprecated | Recommended |
-| x2many commands | tuples | `Command` or tuples | Optional |
+| Server QWeb output (XSS sink) | `t-esc` (escapes) / `t-raw` (only raw directive); no `t-out` | `t-out` escapes but prints `Markup` values raw; `t-esc` alias; `t-raw` deprecated (still renders raw) - audit `Markup(...)` built from user input | Recommended |
+| x2many commands (also payloads under `sudo()`) | tuples | `Command.create/update/link/set...` or tuples - same `_allow_sudo_commands` rule | Optional |
 | Python | 3.6+ | 3.7+ | Check compatibility |
 | Chatter widgets | Legacy | Simplified | Recommended |
 
@@ -200,14 +201,7 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 notes = fields.Text(groups='my_module.group_manager')
 ```
 
-## Official guideline deltas 14.0 -> 15.0
-
-Only the security-relevant rows of the verified official-guideline matrix that change between 14.0 and 15.0:
-
-| Topic | 14.0 | 15.0 |
-|-------|------|------|
-| server QWeb XSS sink | `t-raw` (only raw directive); `t-esc` escapes; no `t-out` | `t-out` escapes but prints `Markup` values raw; `t-esc` is an alias; `t-raw` deprecated (still renders raw) - audit `Markup(...)` built from user input |
-| x2many payloads under `sudo()` | tuple commands | `Command.create/update/link/set...` or tuples - same `_allow_sudo_commands` rule |
+### Other Unchanged Security Rules
 
 Unchanged in both: `sudo(user)` deprecated (use `with_user`), `_allow_sudo_commands`, `related_sudo=True` default, no `odoo.tools.SQL` (`_search()` -> `Query.select('"t"."c"')`, identifiers via `psycopg2.sql`), `odoo.osv.expression.AND/OR`, RPC guard `check_method_name` (no `@api.private`), route `auth` user/public/none and `type` http/json, CSRF on non-safe `http` methods, `_()` does not escape, Owl 1.4.11 (no `markup`/`htmlEscape`), `fields.NO_ACCESS`, `odoo.tools.file_open`, restricted `odoo.tools.misc.pickle`, `odoo.tools.consteq`, `ir.model.access` + `ir.rule` (no `base.group_everyone`, eval context `user`/`time`/`company_ids`/`company_id`).
 

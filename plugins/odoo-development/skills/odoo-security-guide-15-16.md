@@ -230,7 +230,6 @@ required for 14.0, which has no `Command` class).
 | route override without `@http.route` | URL silently dropped | auto-decorated, warning logged |
 | JS escaping | Owl 1.4: no `markup()`, no `escape` helper (use `t-esc`, `_.escape`) | Owl 2: `markup()`, `escape` in `@web/core/utils/strings` |
 | `t-lang` without `t-call` | silently ignored | SyntaxError at compile |
-| `@api.model` single-dict `create` | silently wrapped | works, logs a warning |
 | test fixtures | no `BaseCommon` / `BaseUsersCommon` | `BaseCommon`, `BaseUsersCommon` (`user_internal`, `user_portal`) available |
 
 Unchanged in both: `_allow_sudo_commands`, `related_sudo`, `Command`, `fields.NO_ACCESS`, `file_open`, restricted

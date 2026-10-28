@@ -181,6 +181,10 @@ class MyModel(models.Model):
 
 ## CRUD Methods with Type Hints
 
+Always write the list form of `create` with `@api.model_create_multi`. A single dict is still
+silently wrapped into a list, and `@api.model` on `create` is converted automatically, but do not
+rely on it. Never call `create` once per record in a loop.
+
 ```python
 @api.model_create_multi
 def create(self, vals_list: list[dict]) -> 'MyModel':
@@ -445,6 +449,12 @@ def action_view_lines(self) -> dict:
 
 ## Constraints with Types
 
+Forms: `_x = models.Constraint("CHECK(...)", "message")`, `models.Index("(a, b) WHERE ...")`,
+`models.UniqueIndex("(a, b)", "message")`. Field-level `index=True` / `'btree'`,
+`'btree_not_null'` (mostly NULL columns), `'trigram'` (ilike search) - only on fields that are
+searched and selective. Business invariants: `@api.constrains` or SQL constraints, never
+`@api.onchange` (UI only).
+
 ```python
 # v19: class attributes (name must start with '_'); a `_sql_constraints` list is
 # IGNORED with only a log warning, so the constraints would silently not exist.
@@ -553,7 +563,7 @@ def _check_lines(self) -> None:
 5. **Domain objects** - `odoo.fields.Domain` instead of `osv.expression`
 6. **Type hints** - optional; `from __future__ import annotations` if you use forward references
 
-## Official Odoo Guidelines (verified for 19.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 19.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were
 checked against the 19.0 source; master-only APIs are translated to the 19.0 equivalent or marked
@@ -584,24 +594,6 @@ Put conditions in the domain rather than `search(...).filtered(...)`; iterate ov
 `filtered()` (callable, field name, dotted path or `Domain`), `mapped()`, `sorted(key=None, reverse=False)`,
 `grouped(key)` -> `{key: recordset}` (shares prefetching). Use `if records:` instead of `len()`;
 call `ensure_one()` before reading a single value (raises `ValueError: Expected singleton`).
-
-### create() override
-```python
-@api.model_create_multi
-def create(self, vals_list):
-    for vals in vals_list:
-        vals.setdefault('code', self.env['ir.sequence'].next_by_code('my.model'))
-    return super().create(vals_list)
-```
-A single dict is still silently wrapped into a list, and `@api.model` on `create` is converted
-automatically, but always write the list form. Never call `create` once per record in a loop.
-
-### Constraints and indexes
-`_x = models.Constraint("CHECK(...)", "message")`, `models.Index("(a, b) WHERE ...")`,
-`models.UniqueIndex("(a, b)", "message")`. Field-level `index=True` / `'btree'`,
-`'btree_not_null'` (mostly NULL columns), `'trigram'` (ilike search) - only on fields that are
-searched and selective. Business invariants: `@api.constrains` or SQL constraints, never
-`@api.onchange` (UI only).
 
 ### Translations
 ```python

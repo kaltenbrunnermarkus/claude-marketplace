@@ -258,7 +258,9 @@ odoo.define('{module_name}.{WidgetName}', function (require) {
 },
 ```
 
-## Official Odoo Guidelines (verified for 15.0)
+Ship assets in the module; third-party libraries unminified under `static/lib/`. Frontend JS/SCSS goes to `web.assets_frontend`.
+
+## Additional Rules from Odoo's Official Guidelines (verified for 15.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 15.0 source; master-only APIs are translated to the 15.0 equivalent or marked as not available.
 
@@ -267,7 +269,6 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 - **`patch`**: `import { patch } from "@web/core/utils/patch";` then `patch(Target.prototype, "my_module.patch_name", { method() { const res = this._super(...arguments); ... return res; } });` - the patch name is mandatory in 15.0. Legacy widgets are extended with `Widget.include({...})`. Patching is the normal extension mechanism in custom addons.
 - **Organize by feature**: `static/src/<feature>/<feature>.js|.xml|.scss` rather than one folder per file type.
 - **SCSS**: 4-space indent, classes prefixed `o_<module>_...`, Odoo SCSS variables (`$o-...`), no id selectors, no CSS custom properties on `:root`.
-- **Assets**: ship assets in the module; third-party libraries unminified under `static/lib/`; XML templates in `web.assets_qweb`, JS/SCSS in `web.assets_backend` / `web.assets_frontend`.
 
 ## v15 OWL 1.x Checklist
 

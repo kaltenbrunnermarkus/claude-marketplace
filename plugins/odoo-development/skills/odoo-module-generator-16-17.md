@@ -140,11 +140,10 @@ Only module-generation rules of the official Odoo guidelines (odoo/odoo `skills/
 
 | Topic | 16.0 | 17.0 |
 |---|---|---|
-| View modifiers in generated views | `attrs` / `states` | Python expressions |
 | `<asset>` XML tag | absent - only the manifest `assets` key | exists (manifest `assets` still the normal way) |
-| Generated JS patches | `patch(obj, "name", ext)` + `this._super` | `patch(obj, ext)` + `super` |
 | Generated SQL helpers | params / `psycopg2.sql` | `odoo.tools.SQL` |
-| Python | 3.7+ | 3.10+ |
+
+View modifiers, JS `patch()` and Python version: see Breaking Changes Summary, OWL 2.x Updates and Python Changes.
 
 Unchanged (16.0 = 17.0): no `base` injection for empty `depends` (declare `['base']`), `license` defaults to `LGPL-3` with a warning, `auto_install` list must be a subset of `depends`, `security/ir.model.access.csv` (no `ir.access`), default test tags `standard`+`at_install` (post-install = `@tagged('post_install', '-at_install')`), `BaseCommon`/`BaseUsersCommon`, imported test classes and inherited `test_*` methods are collected, `--test-tags /module:Class`.
 

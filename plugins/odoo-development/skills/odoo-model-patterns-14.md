@@ -146,6 +146,9 @@ def create(self, vals_list):
             vals['code'] = self.env['ir.sequence'].next_by_code('my.model')
     return super().create(vals_list)
 
+# A legacy `@api.model def create(self, vals)` override is wrapped silently
+# (no warning) and loops one record at a time - always use vals_list.
+
 def write(self, vals):
     """Override write"""
     if 'state' in vals and vals['state'] == 'done':
@@ -223,6 +226,10 @@ def _check_dates(self):
                 )
 ```
 
+- Python invariants belong in `@api.constrains`; `@api.onchange` is UI-only.
+- `models.Constraint`/`Index`/`UniqueIndex` do not exist in 14.0: use `_sql_constraints`.
+- `index=True` only on searched AND selective fields (boolean only: a plain btree). Multi-column or partial indexes: `def init(self):` with `tools.create_index(self._cr, ...)` or explicit SQL.
+
 ## Search and Domain
 
 ```python
@@ -251,6 +258,8 @@ def get_partner_data(self):
         limit=50,
     )
 ```
+
+- Combine domains with `odoo.osv.expression.AND([...])` / `OR([...])`, never by concatenating a user-supplied list onto a security domain (`fields.Domain` is 19.0+).
 
 ## XML Views with attrs
 
@@ -356,7 +365,7 @@ class MyWizard(models.TransientModel):
         return {'type': 'ir.actions.act_window_close'}
 ```
 
-## Official Odoo Guidelines (verified for 14.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 14.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 14.0 source; master-only APIs are translated to the 14.0 equivalent or marked as not available.
 
@@ -382,14 +391,6 @@ self.env['my.model.line'].create([{'model_id': o.id, 'name': 'X'} for o in order
 - No `_read_group(domain, groupby, aggregates)` in 14.0 (that signature is 17.0+).
 - Iterate recordsets (shared prefetch) instead of `browse(id)` in a loop. Put filters in the domain, not in `filtered()`.
 
-### Create override
-`BaseModel.create` is `@api.model_create_multi`. Override with `@api.model_create_multi def create(self, vals_list)`. A legacy `@api.model def create(self, vals)` is wrapped silently (no warning) and loops one record at a time.
-
-### Constraints and indexes
-- Python invariants: `@api.constrains`. `@api.onchange` is UI-only.
-- SQL: `_sql_constraints = [('name_uniq', 'unique(name, company_id)', 'Name must be unique.')]`. `models.Constraint`/`Index`/`UniqueIndex` do not exist in 14.0.
-- `index=True` only on searched AND selective fields (boolean only: a plain btree). Multi-column or partial indexes: `def init(self):` with `tools.create_index(self._cr, ...)` or explicit SQL.
-
 ### Translations
 ```python
 from odoo import _, _lt
@@ -401,8 +402,7 @@ raise UserError(_("%(name)s: %(count)s lines", name=n, count=c))     # named
 - `_()` formats after the translation lookup (`%` style, positional or named, not both). It does not escape and does not format lists per language.
 - `self.env._` and `LazyTranslate` do not exist in 14.0. Never call `_()` at import time. Never format before calling `_()`.
 
-### Domains, grouping, context
-- Combine domains with `odoo.osv.expression.AND([...])` / `OR([...])`, never by concatenating a user-supplied list onto a security domain (`fields.Domain` is 19.0+).
+### Grouping, context
 - `recordset.grouped()` does not exist: use `odoo.tools.groupby(records, key)` (returns `(key, list)` pairs) or a `defaultdict(lambda: self.env['my.model'])`.
 - `default_<field>` keys in the context are used by `default_get` (and by `mail.thread` auto-subscription) for every create on a model with that field. Strip them (`odoo.tools.clean_context`) before creating unrelated records; prefix custom context keys with the module name.
 

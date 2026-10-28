@@ -29,15 +29,52 @@ from . import test_security
 from . import test_integration
 ```
 
+Test collection fails silently (nothing warns):
+
+- The file must be named `test_*.py` **and** be imported in `tests/__init__.py`; otherwise it is never collected.
+- **Imported test classes**: a `TestCase` class imported into another test file is collected again (runs twice) in 14.0-17.0; from 18.0 classes whose `__module__` is another file are skipped. Define each test class in exactly one `test_*.py` file and import shared bases from `common.py` (not from another `test_*.py`).
+- **Inherited `test_*` methods**: collected from base classes in 14.0-17.0 (a shared base with `test_*` methods runs once per subclass); from 18.0 they are **not** collected unless the subclass sets `allow_inherited_tests_method = True`. Put shared tests in a mixin without `test_` methods, or set the flag deliberately (18.0+).
+
 ## Base Test Classes
+
+### Base classes per version
+
+| Class | 14.0 | 15.0 | 16.0-17.0 | 18.0-19.0 |
+|---|---|---|---|---|
+| `TransactionCase` (`odoo.tests`) | per-test transaction, **no** class-level `cls.env` | savepoint-based, `setUpClass` + `cls.env` | same | same |
+| `SavepointCase` | class-level fixtures (use this in 14.0) | deprecated alias | 16.0: deprecated alias; 17.0: removed | removed |
+| `HttpCase` | yes | yes | yes | yes |
+| `BaseCommon` (`odoo.addons.base.tests.common`) | - | - | yes | yes (19.0 extended, see below) |
+| `BaseUsersCommon` (adds `user_internal`, `user_portal`) | - | - | yes | 18.0 yes; 19.0 - (use `BaseCommon._create_new_internal_user()` / `_create_new_portal_user()`) |
+| `TransactionCaseWithUserDemo` / `HttpCaseWithUserDemo` | yes (per-test `setUp`) | yes | yes | yes |
+| `new_test_user` (`odoo.tests.common`) | yes | yes | yes | yes |
+
+What `BaseCommon` really sets up:
+- **16.0-18.0**: `cls.env` with a context that disables mail side effects (`DISABLED_MAIL_CONTEXT`: `tracking_disable`, `mail_create_nolog`, `mail_create_nosubscribe`, `mail_notrack`, `no_reset_password`), USD forced as company currency, and a test partner `cls.partner`. The test still runs as **superuser**; there is no non-admin user or extra company. `BaseUsersCommon` adds `cls.user_internal` and `cls.user_portal`.
+- **19.0**: same context (overridable `default_env_context()`), plus `cls.company`, `cls.currency`, `cls.partner`. `setup_independent_user()` / `setup_independent_company()` are hooks returning `None` by default - unless overridden, the test still runs as superuser (with `base.group_user` added).
+
+For tests that must check access rights, create a user explicitly (`new_test_user`, `BaseUsersCommon` in 16.0-18.0, or as in the common setup below) and use `with_user()`. Demo data is not guaranteed to be installed - only use `TransactionCaseWithUserDemo`/`HttpCaseWithUserDemo` when the test needs the demo user.
+
+```python
+# 16.0+ business test base
+from odoo.addons.base.tests.common import BaseCommon
+from odoo.tests import tagged
+
+
+@tagged('post_install', '-at_install')
+class TestMyFlow(BaseCommon):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.record = cls.env['my.model'].create({'name': 'X', 'partner_id': cls.partner.id})
+```
 
 ### Common Test Setup
 
 > **Version notes for this example**
-> - **14.0**: `TransactionCase` has no class-level `cls.env`; a `setUpClass` fixture needs
+> - **14.0**: no class-level `cls.env` in `TransactionCase` (see table above); a `setUpClass` fixture needs
 >   `from odoo.tests.common import SavepointCase` and `class TestMyModuleCommon(SavepointCase)`.
->   From 15.0 `TransactionCase` is savepoint-based (`SavepointCase` is a deprecated alias in
->   15.0-16.0 and gone from 17.0).
 > - **14.0**: no `Command`; use tuples `[(6, 0, ids)]` as below. 15.0+: `[Command.set(ids)]`.
 > - **19.0**: the `res.users` groups field is `group_ids`, not `groups_id`.
 
@@ -420,13 +457,9 @@ class TestMyModelUI(HttpCase):
 | `-at_install` | Removes the default `at_install` tag |
 | `external` | Requires external services (excluded unless selected) |
 
-## Official Odoo Guidelines: Tagging, Collection and Base Classes (verified for 14.0-19.0)
+Master/20.0 switched the default to `post_install`; **14.0-19.0 did not**.
 
-These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 14.0-19.0 sources. Master/20.0 switched the default to `post_install`; **14.0-19.0 did not**.
-
-### Tagging
-
-- Default tags in **all** of 14.0-19.0: `{'standard', 'at_install'}` - `HttpCase` included.
+- The default tags `{'standard', 'at_install'}` apply to `HttpCase` too.
 - Post-install test: `@tagged('post_install', '-at_install')`. Required for `HttpCase` and tours (they need the fully loaded registry and assets).
 - Set exactly one of `at_install` / `post_install`:
   - `@tagged('post_install')` alone keeps the default `at_install` -> the class carries **both** tags and **runs twice**.
@@ -462,46 +495,11 @@ class TestMyModelUi(HttpCase):
 --test-tags /my_module,-/my_module:TestSlow  # exclude a class
 ```
 
-### Silent skips (test collection)
-
-- The file must be named `test_*.py` **and** be imported in `tests/__init__.py`; otherwise it is never collected and nothing warns.
-- **Imported test classes**: a `TestCase` class imported into another test file is collected again (runs twice) in 14.0-17.0; from 18.0 classes whose `__module__` is another file are skipped. Define each test class in exactly one `test_*.py` file and import shared bases from `common.py` (not from another `test_*.py`).
-- **Inherited `test_*` methods**: collected from base classes in 14.0-17.0 (a shared base with `test_*` methods runs once per subclass); from 18.0 they are **not** collected unless the subclass sets `allow_inherited_tests_method = True`. Put shared tests in a mixin without `test_` methods, or set the flag deliberately (18.0+).
-
-### Base classes per version
-
-| Class | 14.0 | 15.0 | 16.0-17.0 | 18.0-19.0 |
-|---|---|---|---|---|
-| `TransactionCase` (`odoo.tests`) | per-test transaction, **no** class-level `cls.env` | savepoint-based, `setUpClass` + `cls.env` | same | same |
-| `SavepointCase` | class-level fixtures (use this in 14.0) | deprecated alias | 16.0: deprecated alias; 17.0: removed | removed |
-| `HttpCase` | yes | yes | yes | yes |
-| `BaseCommon` (`odoo.addons.base.tests.common`) | - | - | yes | yes (19.0 extended, see below) |
-| `BaseUsersCommon` (adds `user_internal`, `user_portal`) | - | - | yes | 18.0 yes; 19.0 - (use `BaseCommon._create_new_internal_user()` / `_create_new_portal_user()`) |
-| `TransactionCaseWithUserDemo` / `HttpCaseWithUserDemo` | yes (per-test `setUp`) | yes | yes | yes |
-| `new_test_user` (`odoo.tests.common`) | yes | yes | yes | yes |
-
-What `BaseCommon` really sets up:
-- **16.0-18.0**: `cls.env` with a context that disables mail side effects (`DISABLED_MAIL_CONTEXT`: `tracking_disable`, `mail_create_nolog`, `mail_create_nosubscribe`, `mail_notrack`, `no_reset_password`), USD forced as company currency, and a test partner `cls.partner`. The test still runs as **superuser**; there is no non-admin user or extra company. `BaseUsersCommon` adds `cls.user_internal` and `cls.user_portal`.
-- **19.0**: same context (overridable `default_env_context()`), plus `cls.company`, `cls.currency`, `cls.partner`. `setup_independent_user()` / `setup_independent_company()` are hooks returning `None` by default - unless overridden, the test still runs as superuser (with `base.group_user` added).
-
-For tests that must check access rights, create a user explicitly (`new_test_user`, `BaseUsersCommon` in 16.0-18.0) and use `with_user()`. Demo data is not guaranteed to be installed - only use `TransactionCaseWithUserDemo`/`HttpCaseWithUserDemo` when the test needs the demo user.
-
 Tag inheritance differs: in 14.0 every test class gets the default tags again (a `@tagged` on a common base class is **not** inherited); in 19.0 tags are inherited from the base class. Decorate every concrete test class explicitly so the behaviour is the same in all versions.
 
-```python
-# 16.0+ business test base
-from odoo.addons.base.tests.common import BaseCommon
-from odoo.tests import tagged
+## Additional Rules from Odoo's Official Guidelines (verified for 14.0-19.0)
 
-
-@tagged('post_install', '-at_install')
-class TestMyFlow(BaseCommon):
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.record = cls.env['my.model'].create({'name': 'X', 'partner_id': cls.partner.id})
-```
+These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 14.0-19.0 sources.
 
 ### assertQueryCount, @warmup, @users
 
@@ -607,7 +605,7 @@ def test_check_company_auto(self):
 # Run all tests for a module
 ./odoo-bin -d testdb -i my_module --test-enable --stop-after-init
 
-# Run specific test class (grammar: [-][tag][/module][:class][.method])
+# Run specific test class (grammar: see Test Tags Reference)
 ./odoo-bin -d testdb -u my_module --test-tags /my_module:TestMyModel --stop-after-init
 
 # Run with coverage

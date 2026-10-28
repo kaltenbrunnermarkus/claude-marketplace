@@ -84,26 +84,17 @@ If not provided:
 2. Extract version from manifest's `version` field (e.g., `18.0.1.0.0`)
 3. If unclear, ask the user
 
-### Step 2: Load Version-Specific Knowledge
-
-```
-Read: odoo-development/skills/odoo-security-guide-{version}.md
-Read: odoo-development/skills/odoo-model-patterns-{version}.md
-```
-
-### Step 3: Perform Review (official Odoo review process)
+### Step 2: Perform Review (official Odoo review process)
 
 The agent follows Odoo's official `odoo-review` process (odoo/odoo `skills/`, branch 20.0), adapted to 14.0-19.0; full text in `agents/odoo-code-reviewer.md`:
 
 1. **Scope**: pin the reviewed commit and its base; read the diff, the manifests (`depends`), commit messages and PR description from that checkout only. Note whether the target is a released version. Review an Enterprise/Community other half together.
-2. **Map** every changed file to the plugin guideline files that apply (Python -> model patterns, controllers/security/sudo/SQL -> security guide + audit sweep, XML -> `xml-view-patterns.md`, `static/` -> OWL guide, `tests/` -> `odoo-test-patterns.md`, released target -> stable-branch policy).
+2. **Map** every changed file to the plugin guideline files of the target version that apply (Python -> `odoo-model-patterns-{version}.md`, controllers/security/sudo/SQL -> `odoo-security-guide-{version}.md` + audit sweep, XML -> `xml-view-patterns.md`, `static/` -> OWL guide, `tests/` -> `odoo-test-patterns.md`, released target -> stable-branch policy).
 3. **Read** every mapped section before the first finding.
-4. **Rules pass**, including code the diff never shows: overrides of changed methods, renamed names in Python/XML/JS (xpaths, domains, `patch()`), shared context keys and their JS twin, the Enterprise half.
+4. **Rules pass** against the mapped sections and the Review Categories below, including code the diff never shows: overrides of changed methods, renamed names in Python/XML/JS (xpaths, domains, `patch()`), shared context keys and their JS twin, the Enterprise half.
 5. **Merits pass**: edge values, rounding, timezones, empty and multi-record `self`, concurrency, the second run, tests that would fail without the change, cost at scale.
 6. **Version traps**: confirm every API flagged or recommended exists in the target version (`odoo-version-knowledge-all.md` cross-version table); never recommend master/20.0-only APIs.
 7. **Report** each finding with file/line, defect, failure scenario, fix, and rule or *judgement*; end with a **Guidelines read:** line.
-
-Review the module against these categories:
 
 ## Review Categories
 

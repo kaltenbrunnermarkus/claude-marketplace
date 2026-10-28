@@ -293,7 +293,7 @@ Only the ORM/model rows of the verified official-guideline matrix that change be
 | report/website QWeb output | `t-esc` (escapes), `t-raw` (raw); no `t-out` | `t-out`; `t-esc` alias; `t-raw` deprecated |
 | class-level test fixtures | `SavepointCase` | `TransactionCase` with `setUpClass` (`SavepointCase` deprecated alias) |
 
-Unchanged in both: no `grouped()` (use `odoo.tools.groupby`), single-dict `@api.model` create wrapped silently, `_sql_constraints` + boolean `index`, `_()`/`_lt` with `%` args (no `self.env._`), `read_group(domain, fields, groupby)` returning dicts, `odoo.osv.expression.AND/OR`, related through x2many truncates to the first record, `t-lang` without `t-call` silently ignored, `_check_company_auto`, `action_archive`.
+Unchanged in both (create override: see Create Method): no `grouped()` (use `odoo.tools.groupby`), `_sql_constraints` + boolean `index`, `_()`/`_lt` with `%` args (no `self.env._`), `read_group(domain, fields, groupby)` returning dicts, `odoo.osv.expression.AND/OR`, related through x2many truncates to the first record, `t-lang` without `t-call` silently ignored, `_check_company_auto`, `action_archive`.
 
 ## Migration Checklist
 

@@ -44,7 +44,15 @@ access_custom_model_user,custom.model.user,model_custom_model,custom_module.grou
 access_custom_model_manager,custom.model.manager,model_custom_model,custom_module.group_custom_manager,1,1,1,1
 ```
 
+- Access model in 17.0: `ir.model.access` (CSV) + `ir.rule`. There is no `ir.access` model in 17.0.
+- Default deny: a model without a matching access row is inaccessible (a warning is logged at module load).
+- An access row with an **empty `group_id`** applies to every user, including portal and public. There is no `base.group_everyone` in 17.0. Flag create/write/unlink granted to an empty group, `base.group_portal` or `base.group_public`.
+
 ## Record Rules (v17 Syntax)
+
+- Rule combination: global rules (no groups) are AND-ed; the rules of **all** the user's groups are OR-ed together and that result is AND-ed with the globals. Non-overlapping global rules lock everyone out.
+- `perm_read/perm_write/perm_create/perm_unlink` default to True; a rule restricted to some operations leaves the others unfiltered.
+- Rule eval context: `user`, `time`, `company_ids`, `company_id`. `allowed_company_ids` is NOT available in rule domains (the rule fails validation).
 
 ### Multi-Company Rule (v17)
 
@@ -123,22 +131,29 @@ class SecureModel(models.Model):
 
 ### Secure SQL Queries (v17 - Parameterized)
 
+Prefer the ORM. Never build SQL with `+`, `%`, `.format()` or f-strings. 17.0 form: `from odoo.tools import SQL`; `SQL("... %s ...", value)`, `SQL.identifier(name)` for identifiers (validated by assert).
+
 ```python
+from odoo.tools import SQL
+
 def _get_secure_data(self):
     """Use parameterized queries (v17 pattern)."""
-    # SAFE: Parameterized query
-    self.env.cr.execute(
+    # SAFE: values as parameters, table name via SQL.identifier
+    self.env.cr.execute(SQL(
         """
         SELECT id, name, amount
         FROM %s
-        WHERE company_id = %%s
-          AND active = %%s
-          AND create_uid = %%s
-        """ % self._table,
-        [self.env.company.id, True, self.env.user.id]
-    )
+        WHERE company_id = %s
+          AND active = %s
+          AND create_uid = %s
+        """,
+        SQL.identifier(self._table),
+        self.env.company.id, True, self.env.user.id,
+    ))
     return self.env.cr.dictfetchall()
 ```
+
+For SQL over ORM-filtered rows: `query = self._search(domain)` (returns a `Query`) then `self.env.cr.execute(query.select(SQL(...)))`.
 
 ## View Security (v17 Syntax - NO attrs)
 
@@ -253,6 +268,8 @@ class SecureModel(models.Model):
     )
 ```
 
+Field `groups` hides the field from `fields_get` and raises `AccessError` on explicit read/write/search. Secret fields (passwords/tokens) need `groups="base.group_system"` or `groups=fields.NO_ACCESS` (`'.'`).
+
 ## Complete Security Template (v17)
 
 ### security/custom_module_security.xml
@@ -305,7 +322,7 @@ class SecureModel(models.Model):
 </odoo>
 ```
 
-## Official Odoo Guidelines (verified for 17.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 17.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 17.0 source; master-only APIs are translated to the 17.0 equivalent or marked as not available.
 
@@ -317,7 +334,7 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 | `with_user()` / `with_company()` | The switch is not intentional or widens access (`with_user` drops superuser mode). |
 | x2many vals under sudo | `Command`/tuple payloads on a sensitive comodel run with sudo unless the comodel sets `_allow_sudo_commands = False` (core does this on `ir.rule`, `ir.model.access`, ...). |
 | `related=` | Related fields are computed as superuser by default (`related_sudo=True`). A related chain onto `ir.attachment` or other sensitive data needs `related_sudo=False`. |
-| `cr.execute(...)` | String building with `+`, `%`, `.format()` or f-strings. 17.0 form: `from odoo.tools import SQL`; `SQL("... %s ...", value)`, `SQL.identifier(name)` for identifiers (validated by assert). Prefer the ORM; for SQL over ORM-filtered rows: `query = self._search(domain)` (returns a `Query`) then `self.env.cr.execute(query.select(SQL(...)))`. |
+| `cr.execute(...)` | String building with `+`, `%`, `.format()` or f-strings; see Secure SQL Queries. |
 | Domains | A user-supplied list concatenated onto a security domain. 17.0 has no `fields.Domain`; combine with `from odoo.osv import expression` -> `expression.AND([...])` / `expression.OR([...])`. |
 | Public model method | Any method without `_` is callable via RPC with attacker arguments. The 17.0 guard (`odoo.service.model.get_public_method`) blocks `_`-prefixed names and methods decorated with `@api.private`; it does NOT block classmethods/staticmethods. |
 | `@http.route` auth | `auth` must match exposure: `'user'`, `'public'` or `'none'` (no `bearer` in 17.0). |
@@ -326,22 +343,13 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 | Python HTML building | f-strings or `%` on plain `str` that is then wrapped in `Markup`. Use `Markup("<p>%s</p>") % value` or `Markup(...).format(...)`; `_("...%s", value)` escapes the translation when an argument is `Markup`. |
 | JS HTML sinks | `innerHTML`, `insertAdjacentHTML`, Owl `markup()` on non-literal values. 17.0 helpers: `htmlEscape` and `markup` from `@odoo/owl`, `escape` from `@web/core/utils/strings`. (`@web/core/utils/html` does not exist in 17.0.) |
 | `fields.Html` | Escaping is not sanitizing. Options: `sanitize`, `sanitize_overridable`, `sanitize_tags`, `sanitize_attributes`, `sanitize_style`, `sanitize_form`, `strip_style`, `strip_classes`. |
-| Secret fields | Passwords/tokens without `groups="base.group_system"` or `groups=fields.NO_ACCESS` (`'.'`). Field `groups` hides the field from `fields_get` and raises `AccessError` on explicit read/write/search. |
+| Secret fields | Passwords/tokens without `groups="base.group_system"` or `groups=fields.NO_ACCESS`; see Field-Level Security. |
 | `open()` | Builtin `open()` on an influenceable path. Use `odoo.tools.file_open(name, mode='r', filter_ext=None, env=None)`: confined to addons paths, the Odoo root and temp dirs from `file_open_temporary_directory(env)`; it never creates files but opens existing ones in any mode. |
 | `eval`/`exec` | Any use. Use `json.loads`/`ast.literal_eval`; at worst `odoo.tools.safe_eval.safe_eval` with a minimal namespace. safe_eval rejects every name containing `__`; public model methods returning rich objects are reachable from server actions. |
 | `getattr`/`setattr` on records | Dynamic field names; use `record[name]`. |
 | `pickle` | Stdlib pickle on untrusted data. 17.0 still ships a restricted `odoo.tools.misc.pickle` (whitelisted unpickler), but prefer JSON. |
 | Secret comparison | `==` on tokens. Use `odoo.tools.consteq` (= `hmac.compare_digest`), better: look the token up in the DB. |
 | Mutable defaults | `def m(self, vals={})` / `[]` defaults. |
-
-### Access model in 17.0
-
-- `ir.model.access` (CSV) + `ir.rule`. There is no `ir.access` model in 17.0.
-- Default deny: a model without a matching access row is inaccessible (a warning is logged at module load).
-- An access row with an **empty `group_id`** applies to every user, including portal and public. There is no `base.group_everyone` in 17.0. Flag create/write/unlink granted to an empty group, `base.group_portal` or `base.group_public`.
-- Rule combination: global rules (no groups) are AND-ed; the rules of **all** the user's groups are OR-ed together and that result is AND-ed with the globals. Non-overlapping global rules lock everyone out.
-- `perm_read/perm_write/perm_create/perm_unlink` default to True; a rule restricted to some operations leaves the others unfiltered.
-- Rule eval context: `user`, `time`, `company_ids`, `company_id`. `allowed_company_ids` is NOT available in rule domains (the rule fails validation).
 
 ## v17 Security Checklist
 

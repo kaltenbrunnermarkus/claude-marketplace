@@ -14,7 +14,7 @@
 | API | `@api.multi` already removed in 13.0 (fails in 14 and 15) | Only for code ported from <= 12.0 |
 | Fields | `track_visibility` legacy in both 14 and 15 (`tracking=True` is the valid parameter in both) | Low - clean up |
 | Frontend | Owl 1.4.11 in both; 15.0 adds the ES-module web client (`/** @odoo-module **/`, `@web/core/...`) | High for JS |
-| Assets | manifest `assets` key replaces XML asset templates and the `'qweb'` key | Medium - Update manifests |
+| Assets | manifest `assets` key (absent in 14.0) replaces XML templates inheriting `web.assets_*` and the `'qweb'` key; JS QWeb XML goes in `web.assets_qweb` | Medium - Update manifests |
 | Python | 3.6+ (14.0) -> 3.7+ (15.0) | Low - Check compatibility |
 
 ## Legacy Clean-up: @api.multi
@@ -183,16 +183,14 @@ https://raw.githubusercontent.com/odoo/odoo/15.0/addons/sale/models/sale_order.p
 
 ## Official guideline deltas 14.0 -> 15.0
 
-Only the rows of the verified official-guideline matrix that change between 14.0 and 15.0:
+Rows of the verified official-guideline matrix that change between 14.0 and 15.0 and are not covered above (assets and Python: see Breaking Changes Summary):
 
 | Topic | 14.0 | 15.0 |
 |-------|------|------|
 | `Command` class | absent (tuples `(0, 0, vals)`...) | `from odoo import Command` (tuples still work) |
 | server QWeb output | no `t-out`; `t-esc` escapes, `t-raw` prints raw | `t-out` (escapes, Markup passes); `t-esc` = alias; `t-raw` deprecated |
-| manifest `assets` key | absent: XML templates inheriting `web.assets_*`, JS QWeb in `'qweb'` | `assets` key; JS QWeb XML in `web.assets_qweb` |
 | class-level test fixtures | `SavepointCase` (`TransactionCase` has no `cls.env`) | `TransactionCase` (`SavepointCase` is a deprecated alias) |
 | JS patching | legacy `.include()` / `.extend()` | `patch(obj, name, ext)` with `this._super` |
-| minimum Python | 3.6 | 3.7 |
 
 Unchanged in both: no `grouped()`, no `odoo.tools.SQL`, no `fields.Domain`, no `@api.private` (RPC guard `check_method_name`), route `auth` user/public/none and `type` http/json, Owl 1.4.11 without `markup`/`htmlEscape`, `t-lang` without `t-call` silently ignored, `read_group(domain, fields, groupby)` returning dicts, `_sql_constraints`, boolean `index`, no `base` injection in `depends`, default test tags `standard` + `at_install`, `_allow_sudo_commands`, restricted `odoo.tools.misc.pickle`.
 

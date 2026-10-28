@@ -12,10 +12,10 @@
 
 | Component | v18 Status | v19 Status | Action Required |
 |-----------|------------|------------|-----------------|
-| `_sql_constraints` | Supported | **Ignored** (warning) | Convert to `models.Constraint()` |
-| `groups_id` (res.users, views, actions) | Field name | **`group_ids`** | Rename in Python and XML |
-| Manifest empty `depends` | Stays empty | `['base']` injected | None (declare deps explicitly) |
-| Route `type='json'` | Standard | Deprecated alias of `jsonrpc` | Optional |
+| `_sql_constraints` | Supported: `_sql_constraints = [...]` | **Ignored** (warning) | Convert to `_name_uniq = models.Constraint(...)` |
+| `groups_id` (res.users, ir.ui.view, act_window) | Field name | **`group_ids`** | Rename in Python and XML |
+| Manifest empty `depends` | Stays empty (no automatic `base`; declare `['base']` if nothing else) | `['base']` injected | None (declare deps explicitly) |
+| Route `type` | `http`, `json` | `http`, `jsonrpc`, `json2`; `json` = deprecated alias of `jsonrpc` | Optional |
 | Type hints | Optional | Optional | None |
 | `SQL()` builder | Recommended | Recommended (plain parameterized SQL still works) | None |
 | OWL | 2.x | 2.x (2.8.4) | None |
@@ -277,22 +277,18 @@ match self.state:
 'version': '19.0.1.0.0',
 ```
 
-## Official guideline deltas 18.0 -> 19.0
+## Additional deltas from Odoo's official guidelines (18.0 -> 19.0)
 
-Only rows of the verified official-guideline matrix that matter for generated modules and change between 18.0 and 19.0:
+Verified official-guideline items that matter for generated modules, change between 18.0 and 19.0 and are not in the Breaking Changes Summary:
 
 | Topic | 18.0 | 19.0 |
 |-------|------|------|
-| Manifest `depends` | no automatic `base`; declare `['base']` if nothing else | empty `depends` -> `['base']` injected |
-| SQL constraints in generated models | `_sql_constraints = [...]` | `_name_uniq = models.Constraint(...)` (`_sql_constraints` ignored) |
 | Multi-column index | `init()` + `tools.sql.create_index` | `models.Index(...)` |
 | `@api.model` create | DeprecationWarning | converted silently (generate `@api.model_create_multi` anyway) |
-| Group fields | `groups_id` (res.users, ir.ui.view, act_window) | `group_ids` |
-| Route `type` | `http`, `json` | `http`, `jsonrpc`, `json2` (`json` deprecated alias) |
 | ir.rule domain names | `user`, `time`, `company_ids`, `company_id` | `user`, `company_ids`, `company_id` |
 | `BaseCommon` in generated tests | superuser env, mail disabled | optional independent user/company (`setup_independent_user/company`) |
 
-Unchanged: `license` defaults to LGPL-3 (with warning), `auto_install` may be a subset list of `depends`, `assets` manifest key, `security/ir.model.access.csv` (no `ir.access`), default test tags `standard` + `at_install`, post-install via `@tagged('post_install', '-at_install')`, test files `tests/test_*.py` imported in `tests/__init__.py`, imported TestCase classes skipped, inherited `test_*` methods need `allow_inherited_tests_method = True`, Owl 2.x and `patch(obj, extension)`.
+Unchanged: `license` defaults to LGPL-3 (with warning), `auto_install` may be a subset list of `depends`, `assets` manifest key, `security/ir.model.access.csv` (no `ir.access`), default test tags `standard` + `at_install`, post-install via `@tagged('post_install', '-at_install')`, test files `tests/test_*.py` imported in `tests/__init__.py`, imported TestCase classes skipped, inherited `test_*` methods need `allow_inherited_tests_method = True`, `patch(obj, extension)`.
 
 ## Migration Checklist
 

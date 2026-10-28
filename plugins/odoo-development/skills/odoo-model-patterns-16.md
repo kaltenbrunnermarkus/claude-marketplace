@@ -168,6 +168,8 @@ def unlink(self):
     return super().unlink()
 ```
 
+A single-dict `@api.model def create(self, vals)` still works in 16.0 but logs a WARNING; never call `create()` per record in a loop.
+
 ## XML Views: attrs / states (16.0 syntax)
 
 ```xml
@@ -320,7 +322,7 @@ def action_draft(self):
     self.filtered(lambda r: r.state == 'cancelled').write({'state': 'draft'})
 ```
 
-## Official Odoo Guidelines (verified for 16.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 16.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 16.0 source; master-only APIs are translated to the 16.0 equivalent or marked as not available.
 
@@ -340,16 +342,6 @@ counts = {g['model_id'][0]: g['__count'] for g in groups}   # lazy=True -> key '
 for record in self:
     record.total_amount = totals.get(record.id, 0.0)
 ```
-
-### create override
-```python
-@api.model_create_multi
-def create(self, vals_list):
-    for vals in vals_list:
-        vals.setdefault('code', self.env['ir.sequence'].next_by_code('my.model'))
-    return super().create(vals_list)
-```
-A single-dict `@api.model def create(self, vals)` still works in 16.0 but logs a WARNING; never call `create()` per record in a loop.
 
 ### Constraints and indexes
 ```python
@@ -391,7 +383,6 @@ class MyModel(models.Model):
 ### Fields
 - `related='a_ids.b'` through an x2many takes only the FIRST record of each intermediate x2many (silent truncation); use a compute instead.
 - Reserved fields: `active` (archive with `action_archive()`), `state`, `parent_id` + `parent_path` with `_parent_store = True`, `company_id` with `_check_company_auto = True` and `check_company=True` (all exist in 16.0); keep `_log_access` on TransientModel (asserted).
-- `index=True` only on fields that are searched AND selective.
 
 ### Transactions
 - Never `self.env.cr.commit()` / `rollback()` unless you own the cursor; justify every commit.
@@ -409,7 +400,7 @@ class MyModel(models.Model):
 2. **Use attrs/states** for record-dependent view modifiers
 3. **Use @api.model_create_multi** for create methods
 4. **Leverage OWL 2.x** for frontend components
-5. **Use index=True** only on searched, selective fields
+5. **Use index=True** only on fields that are searched AND selective
 
 ## Migration Notes to v17
 

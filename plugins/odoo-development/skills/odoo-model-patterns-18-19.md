@@ -12,9 +12,9 @@
 
 | Feature | v18 Status | v19 Status | Action |
 |---------|------------|------------|--------|
-| `_sql_constraints` | Supported | **Ignored** (warning only) | Convert to `models.Constraint()` |
-| `odoo.osv.expression` | Standard | Deprecated | Use `odoo.fields.Domain` |
-| `read_group()` | Public API | Deprecated | `_read_group()` / `formatted_read_group()` |
+| `_sql_constraints` | Supported: `_sql_constraints = [(name, sql, msg)]` | **Ignored** (warning only) | Convert to `_name_uniq = models.Constraint('UNIQUE(name)', msg)` |
+| `odoo.osv.expression` | Standard: `expression.AND([d1, d2])` | Deprecated | Use `odoo.fields.Domain`: `Domain(d1) & Domain(d2)` |
+| `read_group()` | Public API (dicts); `_read_group(domain, groupby, aggregates)` -> tuples | Deprecated; `_read_group` unchanged | `_read_group()` / `formatted_read_group()` |
 | `groups_id` (res.users) | Field name | Renamed `group_ids` | Rename |
 | Type hints | Optional | Optional | Nothing to do |
 | `SQL()` builder | Recommended | Recommended (plain `cr.execute(str, params)` still works) | Nothing mandatory |
@@ -247,17 +247,14 @@ query = SQL(
 )
 ```
 
-## Official guideline deltas 18.0 -> 19.0
+## Additional deltas from Odoo's official guidelines (18.0 -> 19.0)
 
-Only the ORM rows of the verified official-guideline matrix that change between 18.0 and 19.0:
+ORM items of the verified official-guideline matrix that change between 18.0 and 19.0 and are not in the Breaking Changes Summary:
 
 | Topic | 18.0 | 19.0 |
 |-------|------|------|
-| SQL constraints | `_sql_constraints = [(name, sql, msg)]` | `_name_uniq = models.Constraint('UNIQUE(name)', msg)`; `_sql_constraints` ignored with a warning |
 | Multi-column index | `init()` + `odoo.tools.sql.create_index(cr, name, table, [cols])` | `_my_idx = models.Index('(col_a, col_b)')` / `models.UniqueIndex(...)` |
-| Combine domains | `expression.AND([d1, d2])` | `Domain(d1) & Domain(d2)` (`from odoo.fields import Domain`) |
 | `create` override with `@api.model` | DeprecationWarning | converted silently (still use `@api.model_create_multi`) |
-| Aggregation | `_read_group(domain, groupby, aggregates)` -> tuples; `read_group` (dicts) | `_read_group` unchanged; `read_group` deprecated -> `formatted_read_group` |
 | Translation | `self.env._("%s", arg)`; list args printed as Python lists | iterable args formatted per language |
 | Archiving | `toggle_active()` available | `toggle_active()` deprecated -> `action_archive()` / `action_unarchive()` |
 | Public classmethods | RPC-callable unless prefixed `_` | blocked by the RPC guard |

@@ -11,9 +11,9 @@
 
 | Category | Change | Impact |
 |----------|--------|--------|
-| Views | `attrs=` / `states=` (the 16.0 syntax) replaced by Python expressions | **CRITICAL** - Must migrate |
+| Views | `attrs=` / `states=` (the 16.0 syntax; `invisible="expr"` on record fields does not work in 16.0) replaced by Python expressions; `attrs`/`states` no longer supported | **CRITICAL** - Must migrate |
 | ORM | single-dict `create` still works in 17.0 but logs a WARNING (same as 16.0) | Medium - use `@api.model_create_multi` |
-| SQL | `odoo.tools.SQL` builder introduced | Medium - rewrite string SQL helpers |
+| SQL | `odoo.tools.SQL` builder introduced, `SQL.identifier` (16.0: none, `odoo.tools.SQL` = `psycopg2.sql.SQL`; `psycopg2.sql.Identifier`) | Medium - rewrite string SQL helpers |
 | JS | `patch(obj, ext)` + `super` (16.0: `patch(obj, name, ext)` + `this._super`) | High - every patch call changes |
 | Domain | New domain expression syntax | Medium - Learn new operators |
 | Security | Enhanced record rule validation | Medium - Review rules |
@@ -225,17 +225,16 @@ Only rules of the official Odoo guidelines (odoo/odoo `skills/`, verified per ve
 
 | Topic | 16.0 | 17.0 |
 |---|---|---|
-| View modifiers | `attrs` (domains) / `states`; `invisible="expr"` on record fields does not work | Python expressions; `attrs`/`states` no longer supported |
-| SQL builder | none (`odoo.tools.SQL` = `psycopg2.sql.SQL`); `psycopg2.sql.Identifier` | `odoo.tools.SQL`, `SQL.identifier` |
 | `_search()` + custom SQL | `query.select('"t"."c"')` -> `(str, params)` | `query.select(SQL(...))` |
 | `_()` and Markup | no escaping of Markup args | escapes args when an argument is Markup; `tools.format_list` available |
 | `records.grouped()` | absent (`tools.groupby`) | exists |
 | Aggregation | `read_group(domain, fields, groupby, lazy)` / `_read_group` same signature -> dicts | `_read_group(domain, groupby, aggregates)` -> tuples (`read_group` still public) |
 | `<asset>` XML tag | absent (manifest `assets` only) | exists |
-| JS `patch` | `patch(obj, "name", ext)`, `this._super` | `patch(obj, ext)`, `super` |
 | Python | 3.7 - 3.12 | 3.10+ |
 
-Unchanged (16.0 = 17.0): default test tags `standard`+`at_install`, imported test classes and inherited `test_*` methods are collected, `BaseCommon`/`BaseUsersCommon`, single-dict create WARNING, `_sql_constraints`, field `index` values, no `base` injection in manifests, `t-lang` without `t-call` = SyntaxError, `@api.private`, route types http/json, auth user/public/none, restricted `tools.misc.pickle`, Owl 2 without `computed`.
+View modifiers, SQL builder and JS `patch`: see Breaking Changes Summary.
+
+Unchanged (16.0 = 17.0): default test tags `standard`+`at_install`, imported test classes and inherited `test_*` methods are collected, `BaseCommon`/`BaseUsersCommon`, `_sql_constraints`, field `index` values, no `base` injection in manifests, `t-lang` without `t-call` = SyntaxError, `@api.private`, route types http/json, auth user/public/none, restricted `tools.misc.pickle`, Owl 2 without `computed`.
 
 ## Migration Checklist
 

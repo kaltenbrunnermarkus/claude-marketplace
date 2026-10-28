@@ -48,8 +48,9 @@ Only web rules of the official Odoo guidelines (odoo/odoo `skills/`, verified pe
 
 | Topic | 16.0 | 17.0 |
 |---|---|---|
-| `patch` | `patch(obj, "name", ext)`, `this._super(...)`, name mandatory | `patch(obj, ext)`, `super.method(...)`, returns unpatch function |
 | Form view modifiers seen by JS | `modifiers` from `attrs`/`states` (domains) | Python expressions evaluated client-side |
+
+`patch`: see Breaking Change: `patch()` signature.
 
 Unchanged (16.0 = 17.0): Owl 2 without `computed` (use getters), escape helpers `markup`/`htmlEscape` from `@odoo/owl` and `escape` from `@web/core/utils/strings` (no `@web/core/utils/html` yet; it arrives in 18.0), organize `static/src` by feature, assets via the manifest `assets` key, SCSS conventions (`o_<module>_` classes, `$o-...` variables).
 

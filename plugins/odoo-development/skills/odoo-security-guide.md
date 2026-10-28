@@ -117,7 +117,7 @@ If the version is not explicitly stated, look for these clues:
 - `res.users.groups_id` renamed `group_ids`; `time` removed from the record-rule eval context
 - RPC guard also blocks classmethods/staticmethods
 
-For the version-aware audit sweep (pattern -> what makes it a finding -> per-version form), see `odoo-security-guide-all.md`, section "Security Audit Sweep".
+For the version-aware audit sweep (pattern -> what makes it a finding -> per-version form), see `odoo-security-guide-all.md`, section "Additional Rules from Odoo's Official Guidelines" -> "Security Audit Sweep".
 
 ---
 

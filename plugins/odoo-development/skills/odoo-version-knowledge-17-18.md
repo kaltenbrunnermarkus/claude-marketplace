@@ -385,7 +385,6 @@ Only the official-guideline rules (Odoo `skills/`, verified against both sources
 | Topic | 17.0 | 18.0 |
 |-------|------|------|
 | Route `auth` values | `user`, `public`, `none` | adds `bearer` (no `bearer_scope`) |
-| Access check API | `check_access_rights()` / `check_access_rule()` | deprecated -> `check_access()` / `has_access()` |
 | Single-dict `@api.model` create | logs a WARNING | DeprecationWarning |
 | Translation API | `_()` frame-based, `_lt` | adds `self.env._` and `LazyTranslate` (`_`/`_lt` still work) |
 | Restricted `odoo.tools.misc.pickle` | exists | removed |
@@ -394,7 +393,7 @@ Only the official-guideline rules (Odoo `skills/`, verified against both sources
 | Inherited `test_*` methods | collected | not collected unless `allow_inherited_tests_method = True` |
 | `SavepointCase` | removed (already gone in 17.0) | removed (use `TransactionCase`) |
 
-Unchanged (despite claims elsewhere): record rule eval context (`company_ids`, `company_id`; never `allowed_company_ids`), `odoo.tools.SQL`, `_check_company_auto`/`check_company`, `_read_group(domain, groupby, aggregates)`, `_sql_constraints`, route types `http`/`json`, QWeb `t-out` (`t-esc` alias, `t-raw` deprecated), default test tags `{'standard', 'at_install'}`, Owl without `computed`, `patch(obj, ext)`.
+Unchanged (despite claims elsewhere; for rule eval context, `SQL` and `_check_company_auto`/`check_company` see the sections above): `_read_group(domain, groupby, aggregates)`, `_sql_constraints`, route types `http`/`json`, QWeb `t-out` (`t-esc` alias, `t-raw` deprecated), default test tags `{'standard', 'at_install'}`, Owl without `computed`, `patch(obj, ext)`.
 
 ## Migration Checklist
 

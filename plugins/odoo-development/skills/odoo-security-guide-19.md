@@ -55,13 +55,24 @@ access_custom_model_user,custom.model.user,model_custom_model,custom_module.grou
 access_custom_model_manager,custom.model.manager,model_custom_model,custom_module.group_custom_manager,1,1,1,1
 ```
 
+- Rights are the union over the user's groups; a model with no row is inaccessible except in
+  sudo (a warning "have no access rules" is logged at install).
+- Flag create/write/unlink granted to `base.group_portal`, `base.group_public` or to rows without
+  a group. There is no `base.group_everyone` in 19.0, and master's `ir.access` does not exist.
+
 ## Record Rules (v19 Syntax)
+
+- Global rules (no groups) are AND-ed; group rules of the user's groups are OR-ed, then AND-ed
+  with the global ones. Two disjoint global rules lock everyone out.
+- Rules are per operation (`perm_read`, `perm_write`, `perm_create`, `perm_unlink`): a rule
+  covering only read leaves write governed by ACLs alone - cover all CRUD operations.
 
 ### Multi-Company Rule (v19)
 
 ```xml
 <!-- v19: the ir.rule eval context provides user, company_ids, company_id.
-     allowed_company_ids is NOT defined there. A rule without groups is global. -->
+     allowed_company_ids is NOT defined there. A rule without groups is global.
+     Use [('company_id', 'in', company_ids)], or company_ids + [False] when the company is optional. -->
 <record id="custom_model_rule_company" model="ir.rule">
     <field name="name">Custom Model: Multi-Company</field>
     <field name="model_id" ref="model_custom_model"/>
@@ -167,7 +178,9 @@ class SecureModel(models.Model):
 ### SQL Builder (v19, recommended)
 
 `cr.execute()` still accepts a string plus a params tuple, but `SQL()` is the safe way to compose
-queries (identifiers via `SQL.identifier()`). Never format values into the SQL string.
+queries: values as `SQL("... %s", value)`, identifiers via `SQL.identifier(name)`, `IN %s` with a
+tuple. Never format values into the SQL string (`%`, `+`, `.format`, f-strings). For ORM-filtered
+SQL use `query = Model._search(domain)`, then `cr.execute(query.select(SQL(...)))`.
 
 ```python
 from typing import Any
@@ -344,7 +357,7 @@ class AuditLog(models.Model):
 | JSON routes | `type='json'` | `type='jsonrpc'` (`json` deprecated alias) |
 | Owl | 2.x | 2.8.x (no Owl 3) |
 
-## Official Odoo Guidelines (verified for 19.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 19.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were
 checked against the 19.0 source; master-only APIs are translated to the 19.0 equivalent or marked
@@ -358,7 +371,7 @@ as not available.
 | `with_user()` / `with_company()` | the switch is not intentional or uses request data | `with_user(user)` (drops su), `with_company(company)`; `force_company` context is deprecated |
 | x2many commands under sudo | vals with `Command.*` on a security-sensitive comodel are written in sudo | set `_allow_sudo_commands = False` on the comodel (as `res.groups` does) |
 | `related=` | sensitive chain (e.g. to `ir.attachment`, tokens) without `related_sudo=False` | related fields are computed as superuser by default |
-| `cr.execute` | values formatted with `%`, `+`, `.format`, f-string; dynamic identifiers not wrapped | `SQL("... %s", value)`, `SQL.identifier(name)`, `IN %s` with a tuple; ORM-filtered SQL: `query = Model._search(domain)` then `cr.execute(query.select(SQL(...)))` |
+| `cr.execute` | values formatted into the string; dynamic identifiers not wrapped | `SQL()` / `SQL.identifier()`; see SQL Builder |
 | domains | a user-supplied list is concatenated onto a security domain | `Domain(user_dom) & Domain('company_id', 'in', ids)`; `Domain.AND/OR` |
 | public methods | a non-`_` method does something an RPC caller must not trigger with arbitrary args | prefix `_` or `@api.private`; guard is `odoo.service.model.get_public_method` (blocks `_*`, classmethods/staticmethods, `@api.private`) |
 | `@http.route` | `auth` wider than needed; writes on GET; `csrf=False` on a `type='http'` route that is not a webhook | `auth` in `user`/`bearer`/`public`/`none` (no `bearer_scope`); writes with `methods=['POST']`; CSRF on for `http`, none for `jsonrpc` |
@@ -373,19 +386,6 @@ as not available.
 | `pickle` | any use | no restricted pickle wrapper in 19.0; use JSON |
 | token comparison | `==` on secrets | `odoo.tools.consteq(a, b)`; better: look the token up in the DB |
 | mutable defaults | `def f(self, vals={})` | `None` default |
-
-### Access model (19.0)
-- `ir.model.access` (`security/ir.model.access.csv`): rights are the union over the user's groups;
-  a model with no row is inaccessible except in sudo (a warning "have no access rules" is logged
-  at install). Flag create/write/unlink granted to `base.group_portal`, `base.group_public` or to
-  rows without a group. There is no `base.group_everyone` in 19.0, and master's `ir.access`
-  does not exist.
-- `ir.rule`: global rules (no groups) are AND-ed; group rules of the user's groups are OR-ed, then
-  AND-ed with the global ones. Two disjoint global rules lock everyone out. Rules are per
-  operation (`perm_read`, `perm_write`, `perm_create`, `perm_unlink`): a rule covering only read
-  leaves write governed by ACLs alone - cover all CRUD operations.
-- Rule eval context: `user`, `company_ids`, `company_id`. Multi-company:
-  `[('company_id', 'in', company_ids)]`, or `company_ids + [False]` when the company is optional.
 
 ## AI Agent Instructions (v19)
 

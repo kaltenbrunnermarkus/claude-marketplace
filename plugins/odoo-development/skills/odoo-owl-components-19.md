@@ -12,7 +12,9 @@
 ## Version 19.0 OWL Requirements
 
 - **Owl Version**: 2.8.x (`addons/web/static/lib/owl/owl.js`: `version = "2.8.4"`). 19.0 does
-  NOT ship Owl 3; Owl 3-only APIs such as `computed` do not exist.
+  NOT ship Owl 3; Owl 3-only APIs such as `computed` do not exist. For derived state use plain
+  getters (or compute in the handler that changes state); do not port Owl 3 `computed` examples
+  from master.
 - **Module System**: ES modules (`/** @odoo-module **/` header as in the examples)
 - **User / company info**: `import { user } from "@web/core/user"` (an object, not a service):
   `user.userId`, `user.context`, `user.hasGroup(xmlid)`, `user.checkAccessRight(model, op)`,
@@ -386,7 +388,7 @@ registry.category("fields").add("custom_widget", {
 });
 ```
 
-## Official Odoo Guidelines (verified for 19.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 19.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were
 checked against the 19.0 source; master-only APIs are translated to the 19.0 equivalent or marked
@@ -406,10 +408,6 @@ as not available.
   `isMarkup`, `isHtmlEmpty`. There is no `setInnerHtml` in 19.0.
 - ``_t("I love %s", markup`<b>Odoo</b>`)`` escapes the translation and returns markup when an
   argument is markup.
-
-### Derived state
-Owl 2.8 has no `computed`. Use plain getters (or compute in the handler that changes state);
-do not port Owl 3 `computed` examples from master.
 
 ### patch
 `patch(objToPatch, extension)` from `@web/core/utils/patch` returns an unpatch function; a string

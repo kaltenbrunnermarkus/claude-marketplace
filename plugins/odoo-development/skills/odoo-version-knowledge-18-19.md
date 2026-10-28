@@ -12,12 +12,12 @@
 | Category | Change | Impact |
 |----------|--------|--------|
 | SQL Constraints | `_sql_constraints` is **ignored** in 19 (only a warning is logged); use `models.Constraint()` / `models.Index()` / `models.UniqueIndex()` | **CRITICAL** - constraints silently disappear |
-| Domains | `odoo.fields.Domain` replaces `odoo.osv.expression` helpers (still available, deprecated) | Medium |
+| Domains | `odoo.fields.Domain` (`&`, `|`, `~`, `Domain.AND/OR`) replaces `odoo.osv.expression.AND/OR` helpers (still available, deprecated) | Medium |
 | res.users / views / actions | `groups_id` renamed to `group_ids` | High - user creation, data files |
 | Routes | `type='json'` becomes a deprecated alias of `type='jsonrpc'`; new `type='json2'` | Low |
-| `read_group()` | deprecated -> `formatted_read_group()` (`_read_group()` unchanged) | Medium |
+| `read_group()` | `read_group()` (dicts) deprecated -> `formatted_read_group()` (`_read_group()`, returning tuples, unchanged) | Medium |
 | ir.rule eval context | `time` removed (`user`, `company_ids`, `company_id` remain) | Low |
-| Manifest | empty `depends` -> `['base']` injected | Low |
+| Manifest | empty `depends` -> `['base']` injected (18: stays empty, declare `base`) | Low |
 | SQL | `SQL()` builder recommended in both versions; plain `cr.execute(str, params)` still works in 19 | None |
 | Type Hints | optional in both versions | None |
 | OWL | Owl 2.x in both (19.0 ships Owl 2.8.4, not Owl 3) | None |
@@ -461,28 +461,21 @@ def migrate_sql(content: str) -> str:
     return content
 ```
 
-## Official guideline deltas 18.0 -> 19.0
+## Additional deltas from Odoo's official guidelines (18.0 -> 19.0)
 
-Only rows of the verified 14-19 matrix (official Odoo skill rules, checked against both source trees) that change between 18.0 and 19.0:
+Items of the verified 14-19 matrix (official Odoo skill rules, checked against both source trees) that change between 18.0 and 19.0 and are not in the Breaking Changes Summary:
 
 | Topic | 18.0 | 19.0 |
 |-------|------|------|
-| Combine domains | `odoo.osv.expression.AND/OR` | `odoo.fields.Domain` (`&`, `|`, `~`, `Domain.AND/OR`); `expression.*` deprecated |
 | RPC guard (`get_public_method`) | blocks `_` names, `@api.private`, unsafe attribute names | + blocks classmethods/staticmethods; `check_method_name` deprecated |
-| Route `type` | `http`, `json` | `http`, `jsonrpc`, `json2` (`json` = deprecated alias of `jsonrpc`) |
 | Web HTML helpers | `htmlEscape`, `setElementContent`, `isHtmlEmpty` | + `htmlJoin`, `htmlSprintf`, `htmlReplace`, ... (still no `setInnerHtml`) |
-| ir.rule eval context | `user`, `time`, `company_ids`, `company_id` | `user`, `company_ids`, `company_id` |
 | `@api.model` on `create` | works, DeprecationWarning | converted silently |
-| SQL constraints | `_sql_constraints` | `models.Constraint` / `models.Index` / `models.UniqueIndex`; `_sql_constraints` ignored (warning only) |
 | Multi-column index | `init()` + `tools.sql.create_index` | `models.Index` |
 | Translation | `env._`, `_()`, `LazyTranslate`; list args not localized | + iterable args formatted per language |
-| Aggregation | `_read_group` (tuples), `read_group` (dicts) | `read_group` deprecated -> `formatted_read_group` |
 | Archiving | `action_archive`, `toggle_active` | `toggle_active` deprecated |
-| Manifest | empty `depends` stays empty (declare `base`) | `['base']` injected |
 | `BaseCommon` (tests) | runs as superuser | optional independent user/company |
-| Users/groups field | `groups_id` | `group_ids` |
 
-Unchanged between 18.0 and 19.0: default test tags `standard` + `at_install`; post-install via `@tagged('post_install', '-at_install')`; `check_access()` API; Owl 2.x without `computed`; `patch(obj, extension)`; no `ir.access`, no `base.group_everyone`, no `bearer_scope`; `t-raw` still renders unescaped, `t-esc` escapes (both deprecated); Python 3.10+.
+Unchanged between 18.0 and 19.0: default test tags `standard` + `at_install`; post-install via `@tagged('post_install', '-at_install')`; `check_access()` API; Owl without `computed`; `patch(obj, extension)`; no `ir.access`, no `base.group_everyone`, no `bearer_scope`; `t-raw` still renders unescaped, `t-esc` escapes (both deprecated).
 
 ## Comparison: v18 vs v19
 

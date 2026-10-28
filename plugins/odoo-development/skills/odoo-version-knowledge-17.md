@@ -396,7 +396,7 @@ def create(self, vals_list):
 - Type hints recommended
 
 ```python
-# Already available in v17 (not new in v18):
+# Already available in v17 (not new in v18; unchanged in master):
 class MyModel(models.Model):
     _name = 'my.model'
     _check_company_auto = True  # exists in v17
@@ -408,7 +408,7 @@ class MyModel(models.Model):
 # odoo.tools.SQL (SQL builder) also exists in v17
 ```
 
-## Official Odoo Guidelines (verified for 17.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 17.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 17.0 source; master-only APIs are translated to the 17.0 equivalent or marked as not available.
 
@@ -429,12 +429,10 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 | `grouped()` | exists | same |
 | `_read_group` | `_read_group(domain, groupby, aggregates)` -> list of tuples; `read_group()` still public | `formatted_read_group` |
 | Constraints / indexes | `_sql_constraints`; field `index=True/'btree_not_null'/'trigram'`; multi-column index in `init()` | `models.Constraint/Index/UniqueIndex` (`_sql_constraints` ignored) |
-| `_check_company_auto` / `check_company=True` | exist | same |
 | Restricted `odoo.tools.misc.pickle` | exists (still prefer JSON) | removed |
 | `fields.NO_ACCESS`, `odoo.tools.consteq`, `file_open` confinement | exist | same |
 | Access model | `ir.model.access` + `ir.rule`; no `base.group_everyone` | `ir.access` |
 | Rule eval context | `user`, `time`, `company_ids`, `company_id` | similar (`allowed_company_ids` never available) |
-| Manifest | no automatic `base` dependency; `license` defaults to LGPL-3 (warning); `auto_install` may be a list (subset of depends); `assets` key | `base` injected |
 | `<asset>` XML tag, `noupdate` on `<odoo>` | exist | same |
 | `t-lang` without `t-call` | `SyntaxError` | same |
 | Test default tags | `{'standard', 'at_install'}` (also for `HttpCase`) | `post_install` |
@@ -445,7 +443,7 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 
 ### Master-only - do NOT use in 17.0
 
-`odoo.fields.Domain` / `odoo.orm.domains`, `models.Constraint` / `models.Index` / `models.UniqueIndex`, `self.env._`, `LazyTranslate`, `ir.access` / `security/ir.access.csv`, `auth='bearer'` / `bearer_scope`, route types `jsonrpc` / `json2`, `formatted_read_group`, Owl `computed`, `@web/core/utils/html` helpers (`setElementContent`, `htmlJoin`), `allow_inherited_tests_method`, `--unsafe-policy`, `allowed_company_ids` in record rule domains.
+Every master/20.0 entry above that differs from 17.0 (`odoo.fields.Domain`, `models.Constraint/Index/UniqueIndex`, `self.env._`, `LazyTranslate`, `ir.access`, `auth='bearer'`, route types `jsonrpc`/`json2`, `formatted_read_group`, Owl `computed`, `@web/core/utils/html`), plus: `odoo.orm.domains`, `security/ir.access.csv`, `bearer_scope`, `setElementContent`, `htmlJoin`, `allow_inherited_tests_method`, `--unsafe-policy`, `allowed_company_ids` in record rule domains.
 
 ## Best Practices for v17
 
@@ -484,6 +482,10 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
     'application': False,
 }
 ```
+
+- 17.0 adds no automatic `base` dependency (master injects it): list `base` in `depends` if needed.
+- `license` defaults to LGPL-3 (with a warning) when missing.
+- `auto_install` may be a list (a subset of `depends`).
 
 ## Common Issues
 

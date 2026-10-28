@@ -16,7 +16,7 @@
 | track_visibility | Legacy (tracked, logs "unknown parameter") | Same as 14 |
 | tracking=True | Valid parameter | Valid parameter |
 | OWL | Owl 1.4.11 (legacy widgets dominate) | Owl 1.4.11 + new ES-module web client |
-| Manifest assets | XML asset templates + `'qweb'` key | `assets` key |
+| Manifest assets | no `assets` key: inherit `web.assets_backend`/`web.assets_frontend` templates in an XML data file; JS QWeb in `'qweb'` | `assets` key; JS/SCSS in `web.assets_backend`, client QWeb XML in `web.assets_qweb` |
 | Python | 3.6+ | 3.7+ |
 
 ## Legacy Clean-up (already needed in 14.0)
@@ -347,16 +347,14 @@ registry.category('actions').add('my_module.my_action', MyComponent);
 
 ## Official guideline deltas 14.0 -> 15.0
 
-Only the generator-relevant rows of the verified official-guideline matrix that change between 14.0 and 15.0:
+Generator-relevant rows of the verified official-guideline matrix that change between 14.0 and 15.0 and are not covered above (manifest assets and Python: see Migration Overview):
 
 | Topic | 14.0 | 15.0 |
 |-------|------|------|
-| manifest `assets` key | absent: inherit `web.assets_backend`/`web.assets_frontend` templates in an XML data file; JS QWeb in `'qweb'` | `assets` key; JS/SCSS in `web.assets_backend`, client QWeb XML in `web.assets_qweb` |
 | `Command` import | absent (tuples) | `from odoo import Command` |
 | server QWeb templates | `t-esc` / `t-raw`; no `t-out` | `t-out` (`t-esc` alias, `t-raw` deprecated) |
 | test base class with class fixtures | `SavepointCase` | `TransactionCase` (`SavepointCase` deprecated alias) |
 | JS module format / patching | `odoo.define(...)`, `.include()` | `/** @odoo-module **/` imports; `patch(obj, name, ext)` with `this._super` |
-| minimum Python | 3.6 | 3.7 |
 
 Unchanged in both: no `base` injection for empty `depends`, `license` default `LGPL-3`, `auto_install` list must be a subset of `depends`, no `<asset>` XML tag, default test tags `standard` + `at_install` (post-install = `@tagged('post_install', '-at_install')`), imported test classes and inherited `test_*` methods are collected again, `--test-tags /my_module:TestClass`.
 

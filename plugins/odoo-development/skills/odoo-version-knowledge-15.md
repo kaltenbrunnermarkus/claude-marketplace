@@ -149,7 +149,8 @@ class MyModel(models.Model):
 ### CRUD Methods
 ```python
 # Base create() is @api.model_create_multi in 15.0: override it the same way.
-# (@api.model on create() is silently wrapped and then creates record by record.)
+# (@api.model on a single-dict create() is silently wrapped - no warning - and then
+#  creates record by record.)
 @api.model_create_multi
 def create(self, vals_list):
     """Batch create - the standard override form"""
@@ -197,6 +198,7 @@ def unlink(self):
     'author': 'Your Company',
     'website': 'https://yourwebsite.com',
     'license': 'LGPL-3',
+    # 15.0 does not auto-add 'base' to an empty depends: declare it explicitly
     'depends': ['base', 'mail', 'web'],
     'data': [
         'security/security.xml',
@@ -222,6 +224,7 @@ def unlink(self):
 ## Asset Management
 
 ### New Asset Bundle System
+Assets are declared with the manifest `assets` key (or `ir.asset` records); there is no `<asset>` XML data tag in 15.0.
 ```python
 'assets': {
     'web.assets_backend': [
@@ -297,7 +300,7 @@ def create(self, vals_list):
     return super().create(vals_list)
 ```
 
-## Official Odoo Guidelines (verified for 15.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 15.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 15.0 source; master-only APIs are translated to the 15.0 equivalent or marked as not available.
 
@@ -328,10 +331,6 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 | `_read_group(domain, groupby, aggregates)` tuples | absent | `read_group(domain, ['amount:sum'], ['partner_id'], lazy=False)` -> dicts |
 | `models.Constraint` / `models.Index` / `UniqueIndex` | absent | `_sql_constraints`; multi-column indexes in `init()` with `odoo.tools.create_index` |
 | `index='trigram'` / `'btree_not_null'` | absent | `index=True` only |
-| `@api.model` single-dict `create` override | different | silently wrapped (no warning); write `@api.model_create_multi` |
-| `base` auto-added to empty `depends` | absent | declare `'depends': ['base']` explicitly |
-| manifest `assets` key | exists | XML templates go to `web.assets_qweb` |
-| `<asset>` XML data tag | absent | manifest `assets` (or `ir.asset` records) |
 | `t-lang` without `t-call` | different | silently ignored (no error); use it on `t-call` |
 | `BaseCommon` / `BaseUsersCommon` | absent | `TransactionCase`, `TransactionCaseWithUserDemo`, `HttpCaseWithUserDemo`, `new_test_user` |
 | `SavepointCase` | different | deprecated alias of `TransactionCase` (which is savepoint-based) |
@@ -342,13 +341,13 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 
 ### Master/20.0-only - do NOT use in 15.0
 
-`odoo.tools.SQL`, `fields.Domain`, `@api.private`, `self.env._`, `LazyTranslate`, `grouped()`, `_read_group(domain, groupby, aggregates)`, `models.Constraint/Index/UniqueIndex`, `index='trigram'`, `ir.access` / `ir.access.csv`, `auth='bearer'` / `bearer_scope`, route types `jsonrpc`/`json2`, the `<asset>` XML tag, `BaseCommon`, `allow_inherited_tests_method`, tour `expectUnloadPage`, `populate.blueprint`, `--unsafe-policy`, Owl `markup()` / `computed` / `import ... from "@odoo/owl"`, direct `invisible="expr"` view modifiers (use `attrs`).
+Everything marked "absent" above, the `<asset>` XML tag, plus: `auth='bearer'` / `bearer_scope`, tour `expectUnloadPage`, `populate.blueprint`, `--unsafe-policy`, `import ... from "@odoo/owl"`, direct `invisible="expr"` view modifiers (use `attrs`).
 
 ## Best Practices for v15
 
 1. **Use tracking=True** - Not track_visibility
 2. **No @api.multi** - Methods iterate by default
-3. **Consider @api.model_create_multi** - For batch creates
+3. **Use @api.model_create_multi** - For every create override (see CRUD Methods)
 4. **Use OWL for new components** - Legacy JS for maintenance
 5. **Use asset bundles** - New asset management system
 6. **Python 3 super()** - No need for class/self arguments

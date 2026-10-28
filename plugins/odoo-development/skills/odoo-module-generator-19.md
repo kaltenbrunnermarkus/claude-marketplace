@@ -66,6 +66,15 @@
 }
 ```
 
+Manifest facts (19.0, `odoo/modules/module.py`):
+- `depends`: list direct dependencies only. An empty `depends` gets `['base']` injected; listing
+  `base` next to other modules is redundant.
+- `license`: missing -> defaults to `LGPL-3` with a warning (missing `author` also warns). Set it.
+- `auto_install`: `True` (all depends) or a list that must be a subset of `depends`.
+- `assets`: the manifest key for static bundles (`web.assets_backend`, `web.assets_frontend`, ...).
+- `data` loads in order (security groups, then ACL csv, then views/menus); `demo` only with demo data.
+- `application: True` only for full apps; `external_dependencies` for python/bin requirements.
+
 ## Model Template (v19 - Full Type Hints)
 
 ```python
@@ -159,6 +168,13 @@ class {ModelName}(models.Model):
         store=True,
     )
 
+    # === SQL CONSTRAINTS / INDEXES (after the fields) === #
+    # v19: `_sql_constraints` is ignored (warning only) -> models.Constraint
+    _name_uniq = models.Constraint(
+        'UNIQUE(company_id, name)',
+        'Name must be unique per company!',
+    )
+
     @api.depends('line_ids.amount')
     def _compute_total_amount(self) -> None:
         """Compute total from lines."""
@@ -172,12 +188,6 @@ class {ModelName}(models.Model):
         for record in self:
             if record.amount < 0:
                 raise ValidationError(_("Amount must be positive."))
-
-    # v19: `_sql_constraints` is ignored (warning only) -> models.Constraint
-    _name_uniq = models.Constraint(
-        'UNIQUE(company_id, name)',
-        'Name must be unique per company!',
-    )
 
     # === CRUD METHODS (type hints optional) === #
     @api.model_create_multi
@@ -493,6 +503,9 @@ registry.category("actions").add("{module_name}.{component_name}", {ComponentNam
 
 ## Security (v19)
 
+Files: `security/ir.model.access.csv` + `security/<module>_security.xml` (groups, rules).
+There is NO `ir.access` / `ir.access.csv` in 19.0.
+
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
@@ -506,27 +519,16 @@ registry.category("actions").add("{module_name}.{component_name}", {ComponentNam
 </odoo>
 ```
 
-## Official Odoo Guidelines (verified for 19.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 19.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were
 checked against the 19.0 source; master-only APIs are translated to the 19.0 equivalent or marked
 as not available.
 
-### Manifest facts (19.0, `odoo/modules/module.py`)
-- `depends`: list direct dependencies only. An empty `depends` gets `['base']` injected; listing
-  `base` next to other modules is redundant.
-- `license`: missing -> defaults to `LGPL-3` with a warning (missing `author` also warns). Set it.
-- `auto_install`: `True` (all depends) or a list that must be a subset of `depends`.
-- `assets`: the manifest key for static bundles (`web.assets_backend`, `web.assets_frontend`, ...).
-- `data` loads in order (security groups, then ACL csv, then views/menus); `demo` only with demo data.
-- `application: True` only for full apps; `external_dependencies` for python/bin requirements.
-
 ### Structure and naming
 - One model per file named after the model (`models/sale_order.py`); views
   `views/<model>_views.xml`, templates `*_templates.xml`, menus `*_menus.xml`, data
   `data/*_data.xml`, demo `demo/*_demo.xml`.
-- Security: `security/ir.model.access.csv` + `security/<module>_security.xml` (groups, rules).
-  There is NO `ir.access` / `ir.access.csv` in 19.0.
 - Controllers: feature-named files (or `<inherited_module>.py`); `main.py` is legacy.
 - Reports: SQL-view model in `<model>_report.py`; printable report split into
   `<model>_reports.xml` (action) and `<model>_templates.xml` (QWeb).

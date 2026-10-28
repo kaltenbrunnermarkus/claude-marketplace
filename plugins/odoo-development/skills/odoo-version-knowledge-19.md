@@ -72,7 +72,8 @@ They are welcome for readability; their absence never raises an error.
 ### Raw SQL: `SQL()` recommended, string queries still work
 `cr.execute()` accepts either a string with a params tuple/list/dict or an `SQL` object
 (`odoo/sql_db.py`); there is no deprecation of string queries. Prefer `SQL` because it composes
-safely (`SQL.identifier()`, nested `SQL`, `Query.select()`). Never format values into the string.
+safely (`SQL.identifier()`, nested `SQL`, `Query.select()`; `_search()` returns a `Query`). Never
+format values into the string.
 ```python
 from odoo.tools import SQL
 
@@ -85,13 +86,15 @@ self.env.cr.execute(SQL("SELECT id FROM my_model WHERE state = %s", 'draft'))
 
 ### Other 19.0 deprecations (still work, emit warnings)
 - `odoo.osv.expression.AND/OR/normalize_domain` -> `odoo.fields.Domain`
-- `read_group()` -> `_read_group()` (backend) / `formatted_read_group()` (UI-style dicts)
+- `read_group()` -> `_read_group(domain, groupby, aggregates)` (backend, returns a list of tuples) /
+  `formatted_read_group()` (UI-style dicts)
 - `@route(type='json')` -> `type='jsonrpc'`
 - `odoo.models.check_method_name` -> `odoo.service.model.get_public_method` / `@api.private`
 - `check_access_rights()` / `check_access_rule()` (since 18.0) -> `check_access()` / `has_access()`
 - `toggle_active()` -> `action_archive()` / `action_unarchive()`
 - `with_context(force_company=...)` -> `with_company(...)`
-- QWeb `t-esc` (dev-mode warning) and `t-raw` (always warns) -> `t-out`
+- QWeb `t-esc` (still renders escaped, dev-mode warning) and `t-raw` (still renders raw, always
+  warns) -> `t-out`
 
 ### Owl 2 component (19.0 ships Owl 2.8.x)
 ```javascript
@@ -184,7 +187,7 @@ export class MyComponent extends Component {
 - `odoo.fields.Domain` object for domains (`&`, `|`, `~`, `Domain.AND/OR`)
 - `models.Constraint` / `models.Index` / `models.UniqueIndex` replace `_sql_constraints`
 - `@api.private` to hide public methods from RPC
-- `self.env._()` translation helper; `_()` takes interpolation args
+- `self.env._()` translation helper; `_()` takes interpolation args; `_lt` / `LazyTranslate` exist
 - Route type `jsonrpc` (and `json2`); `json` is a deprecated alias
 - `formatted_read_group()` (web) replaces `read_group()` for UI-style results
 
@@ -271,6 +274,8 @@ class MyModel(models.Model):
 ```
 
 ### CRUD Methods with Type Hints
+`create` with a single dict (no decorator) is still accepted silently in 19.0, but always write
+`@api.model_create_multi`.
 ```python
 @api.model_create_multi
 def create(self, vals_list: list[dict]) -> 'MyModel':
@@ -436,7 +441,7 @@ def _search_is_overdue(self, operator: str, value: bool) -> list:
 
 ### Reactivity of Set/Map
 Owl 2 already tracks `Set` and `Map` in `useState` (they are listed as reactive raw types in
-`owl.js`); this is not new in 19.0.
+`owl.js`); this is not new in 19.0. `markup` from `@odoo/owl` works as a tagged template.
 ```javascript
 setup() {
     this.state = useState({
@@ -558,7 +563,7 @@ user = self.env['res.users'].create({
 The view type is `list` (`ir.ui.view.type` has no `tree`); use `'view_mode': 'list,form'` and
 `<list>` arch.
 
-## Official Odoo Guidelines (verified for 19.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 19.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were
 checked against the 19.0 source; master-only APIs are translated to the 19.0 equivalent or marked
@@ -568,22 +573,13 @@ as not available.
 
 | Topic | 19.0 | Notes |
 |-------|------|-------|
-| Access model | `ir.model.access` + `ir.rule` | master `ir.access` / `ir.access.csv` does NOT exist |
-| SQL constraints/indexes | `models.Constraint`, `models.Index`, `models.UniqueIndex` | `_sql_constraints` ignored (same as master) |
-| Domains | `odoo.fields.Domain` | `osv.expression` deprecated but present |
-| `@api.private` | exists | RPC guard: `odoo.service.model.get_public_method` |
+| Access model | `ir.model.access` + `ir.rule` | master `ir.access` does NOT exist (see list below) |
 | `_allow_sudo_commands` | exists | |
 | `fields.NO_ACCESS` | exists (`'.'`) | |
 | `related_sudo` | default True | `related_sudo=False` for sensitive chains |
-| `odoo.tools.SQL`, `SQL.identifier`, `Query.select` | exist | `_search()` returns a `Query` |
-| `_read_group(domain, groupby, aggregates)` | returns list of tuples | `read_group` deprecated |
 | `grouped()` | exists | |
-| `self.env._()`, `_()` with args, `_lt`, `LazyTranslate` | exist | |
-| `create` with single dict | accepted silently | always write `@api.model_create_multi` |
-| Route `type` | `http`, `jsonrpc`, `json2` | `json` = deprecated alias |
 | Route `auth` | `user`, `bearer`, `public`, `none` | NO `bearer_scope` parameter |
 | CSRF | on for `http` (non-GET), none for `jsonrpc` | |
-| QWeb `t-out` | yes | `t-esc` still renders escaped (deprecated), `t-raw` still renders raw (warns) |
 | `t-lang` | only on a node with `t-call` | otherwise `SyntaxError` |
 | `odoo.tools.consteq` | exists | |
 | Restricted pickle (`odoo.tools.pickle`) | absent | never pickle |
@@ -591,7 +587,6 @@ as not available.
 | Test default tags | `standard`, `at_install` | post-install needs `@tagged('post_install', '-at_install')` |
 | `BaseCommon`, `TransactionCaseWithUserDemo` | exist | `SavepointCase` absent |
 | `allow_inherited_tests_method` | exists | |
-| Owl | 2.8.x | no `computed`; `markup` works as tagged template |
 | `patch()` | `patch(obj, extension)` | |
 | `populate` | `odoo-bin populate` duplicates records | no factory API |
 

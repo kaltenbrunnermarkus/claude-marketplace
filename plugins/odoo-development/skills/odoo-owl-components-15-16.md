@@ -13,7 +13,7 @@
 | Feature | OWL 1.x (v15) | OWL 2.x (v16) |
 |---------|---------------|---------------|
 | Module system | `/** @odoo-module **/` (new client) or legacy `odoo.define()` | `/** @odoo-module **/` |
-| Owl API | globals `owl` / `owl.hooks` | `import ... from "@odoo/owl"` |
+| Owl API | Owl 1.4, globals `owl` / `owl.hooks` | Owl 2.x, `import ... from "@odoo/owl"` |
 | Hooks location | `owl.hooks` | Direct from `@odoo/owl` |
 | Template declaration | Property on class | `static template` |
 | RPC | `useService("orm")` (legacy code: `require('web.rpc')`) | `useService("orm")` |
@@ -217,10 +217,8 @@ registry.category("actions").add("my_module.my_action", MyComponent);
 
 | Topic | 15.0 | 16.0 |
 |---|---|---|
-| Owl version | 1.4 (globals `owl`, `owl.hooks`) | 2.x (`@odoo/owl` imports) |
 | Trusted HTML in templates | Owl 1 `t-raw` (raw sink), no `markup()` | `markup()` + `t-out` |
 | JS escape helper | none in `@web/core` (underscore `_.escape`) | `escape` in `@web/core/utils/strings` (Owl `htmlEscape` also available) |
-| XML templates bundle | `web.assets_qweb` | JS bundles |
 
 Unchanged: no Owl `computed`; `patch(obj, "patch_name", { ... })` with `this._super(...)` (mandatory patch name);
 organize code by feature; SCSS conventions (`o_<module>` classes, `$o-...` variables, 4 spaces).

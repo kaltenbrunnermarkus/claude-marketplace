@@ -206,11 +206,10 @@ Only the official-guideline security rules (Odoo `skills/`, verified against bot
 | Topic | 17.0 | 18.0 |
 |-------|------|------|
 | Route `auth` values | `user`, `public`, `none` | adds `bearer` (no `bearer_scope`) |
-| Access check API | `check_access_rights()` / `check_access_rule()` | deprecated -> `check_access()` / `has_access()` |
 | Restricted `odoo.tools.misc.pickle` | exists (still prefer JSON) | removed |
 | JS HTML helpers | `htmlEscape`/`markup` from `@odoo/owl`, `escape` from `@web/core/utils/strings` | adds `@web/core/utils/html` (`htmlEscape`, `isHtmlEmpty`, `setElementContent`) |
 
-Unchanged in both: `sudo(flag)`/`with_user`, `_allow_sudo_commands`, `related_sudo=True` default, `odoo.tools.SQL` + `SQL.identifier`, `odoo.osv.expression.AND/OR`, RPC guard (`_` prefix, `@api.private`), route types `http`/`json` and CSRF behaviour, QWeb `t-out` (`t-esc` alias, `t-raw` deprecated), `fields.NO_ACCESS`, `file_open` confinement, `consteq`, `ir.model.access` + `ir.rule` semantics, no `base.group_everyone`, rule eval context (`user`, `time`, `company_ids`, `company_id`).
+Unchanged in both: `sudo(flag)`/`with_user`, `_allow_sudo_commands`, `related_sudo=True` default, `odoo.osv.expression.AND/OR`, RPC guard (`_` prefix, `@api.private`), route types `http`/`json` and CSRF behaviour, QWeb `t-out` (`t-esc` alias, `t-raw` deprecated), `fields.NO_ACCESS`, `file_open` confinement, `consteq`, `ir.model.access` + `ir.rule` semantics, no `base.group_everyone`. (SQL builder and rule eval context: see Overview and section 1.)
 
 ## Migration Checklist
 

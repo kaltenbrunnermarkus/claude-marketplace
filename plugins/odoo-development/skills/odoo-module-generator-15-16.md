@@ -18,6 +18,8 @@
 | Python (minimum) | 3.7 | 3.7 |
 | create method | @api.model_create_multi (single-dict @api.model silently wrapped) | @api.model_create_multi (single-dict @api.model warns) |
 | XML templates in assets | `web.assets_qweb` | inside JS bundles (`web.assets_backend`, ...) |
+| `t-lang` without `t-call` | silently ignored | SyntaxError |
+| `index=` | bool only | + `'btree_not_null'`, `'trigram'` |
 
 ## Key Changes
 
@@ -443,12 +445,8 @@ registry.category("actions").add("my_module.my_action", MyComponent);
 
 | Topic | 15.0 | 16.0 |
 |---|---|---|
-| XML templates in assets | `web.assets_qweb` | inside the JS bundles |
-| `@api.model` single-dict `create` | silently wrapped | logs a warning |
 | route override without `@http.route` | URL silently dropped | auto-decorated + warning (still re-decorate) |
-| `t-lang` without `t-call` | silently ignored | SyntaxError |
 | test fixtures | `TransactionCase`, `TransactionCaseWithUserDemo`, `HttpCaseWithUserDemo`, `new_test_user` | + `BaseCommon`, `BaseUsersCommon` (`user_internal`, `user_portal`) |
-| `index=` | bool only | + `'btree_not_null'`, `'trigram'` |
 
 Unchanged: no `base` injection into an empty `depends` (declare `['base']`), `license` default `LGPL-3`,
 `auto_install` list must be a subset of `depends`, `assets` key, no `<asset>` XML tag,

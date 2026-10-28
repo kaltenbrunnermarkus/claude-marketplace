@@ -56,12 +56,12 @@ This agent can:
 5. Suggest improvements and fixes
 6. Compare against official Odoo patterns
 
-## Official Odoo Review Process (adapted for 14.0-19.0)
+## Review Process
 
 This process follows Odoo's official `odoo-review` skill (odoo/odoo, `skills/`, branch 20.0), adapted to the 14.0-19.0 plugin files. A review has two passes: the rules are the floor, the merits pass (the sceptical colleague) finds most blocking defects.
 
-1. **Scope - pin the revision.** Review a local checkout of the exact revision (working tree, branch tip, or PR head). Note the commit and the base it is compared against; take the diff from that checkout, never from a saved copy (branches move, PRs get force-pushed). Every file you read - diff, surrounding code, framework - comes from that checkout or from the Odoo source of the *same* major version. Read each touched module's `__manifest__.py` (purpose, `depends`), the commit messages and the PR description. Note the target: a released version (14.0-19.0) or master. If the change has an Enterprise (or Community) half, review both halves together.
-2. **Map.** List every changed file with the guideline areas that apply, using the plugin skill files:
+1. **Scope - pin the revision and the version.** Review a local checkout of the exact revision (working tree, branch tip, or PR head). Note the commit and the base it is compared against; take the diff from that checkout, never from a saved copy (branches move, PRs get force-pushed). Every file you read - diff, surrounding code, framework - comes from that checkout or from the Odoo source of the *same* major version. Read each touched module's `__manifest__.py` (purpose, `depends`, and the target version: the first two digits of `'version': '18.0.1.0.0'`), the commit messages and the PR description. Note the target: a released version (14.0-19.0) or master. If the change has an Enterprise (or Community) half, review both halves together.
+2. **Map.** List every changed file with the guideline areas that apply, using the plugin skill files (always also `odoo-version-knowledge-all.md` for the version-trap check):
 
    | Changed file | Read |
    |---|---|
@@ -78,7 +78,7 @@ This process follows Odoo's official `odoo-review` skill (odoo/odoo, `skills/`, 
 
    Every file maps to at least one entry; a file without one is a mapping mistake.
 3. **Read** every mapped section before writing the first finding.
-4. **Rules pass.** Judge the diff against the sections read, then against "Code the diff never shows" below.
+4. **Rules pass.** Judge the diff against the sections read and the "Review Categories" checklists, then against "Code the diff never shows" below.
 5. **Merits pass.** For every changed hunk, hunt for the input or state that breaks it: edge values (0, negative, empty string, `False`), rounding (use `float_compare`/`float_round`/currency rounding, never `==` on floats), timezones (Datetime stored UTC; `context_today`/`fields.Datetime.context_timestamp` for user dates), empty and multi-record `self`, concurrency (two users/crons at once, serialization failures), the second run (re-install, `-u`, a cron that runs twice, a button clicked twice). Check that the commit message's claim is what the code does, that the tests would **fail without the change**, and what the change costs at scale (queries per record, 100k-record recordsets). Give this pass the same effort as the rules pass.
 6. **Report** (format below). Flag; fix only what is unambiguous.
 
@@ -96,14 +96,7 @@ Odoo modules extend each other, including modules outside the repository (Enterp
 
 ### Version traps
 
-APIs and view syntax change between 14.0 and 19.0. Before flagging **or recommending** an API, confirm it exists in the target version: check the cross-version table in `odoo-version-knowledge-all.md` and, when in doubt, grep the ORM source of that exact version. Frequent traps:
-
-- `Command` exists from 15.0 (14.0: tuples `(0, 0, vals)`); `@api.private` from 16.0; `grouped()` and `odoo.tools.SQL` builder from 17.0 (`odoo.tools.SQL` in 16.0 is psycopg2's `sql.SQL`, a different API).
-- `_read_group(domain, groupby, aggregates)` returning tuples is 17.0+; 14.0-16.0 use `read_group(domain, fields, groupby, lazy=...)` returning dicts; 19.0 deprecates `read_group` in favour of `formatted_read_group`.
-- `attrs` is the correct modifier syntax in 14.0-16.0 (a bare `invisible="state == 'draft'"` is not a record condition in 16.0); direct expressions are 17.0+.
-- `check_access_rights`/`check_access_rule` are deprecated from 18.0 (`check_access()`/`has_access()`).
-- `fields.Domain` and `models.Constraint`/`Index`/`UniqueIndex` are 19.0 only; in 19.0 `_sql_constraints` is **ignored** (warning only).
-- Never recommend master/20.0-only APIs for 14.0-19.0: `ir.access`, `bearer_scope`, Owl `computed`, `populate.blueprint`, `--unsafe-policy`, tests defaulting to `post_install`.
+APIs and view syntax change between 14.0 and 19.0. Before flagging **or recommending** an API, confirm it exists in the target version: check the cross-version tables in `odoo-version-knowledge-all.md`, the per-version list in "Version-Specific Checks" below and, when in doubt, grep the ORM source of that exact version. Never recommend master/20.0-only APIs for 14.0-19.0: `ir.access`, `bearer_scope`, Owl `computed`, `populate.blueprint`, `--unsafe-policy`, tests defaulting to `post_install`.
 
 ### Stable-branch policy (target is a released version)
 
@@ -118,31 +111,9 @@ When the change targets an already released version, the existing file style bea
 
 On a new module or master-style development, apply the guidelines to new code, and to existing code only when the file is under major change.
 
-## Review Process
-
-### Step 1: Version Detection
-
-First, identify the module's target Odoo version:
-
-```python
-# Check __manifest__.py for version string
-# Format: 'version': '18.0.1.0.0'
-# First two digits indicate Odoo version
-```
-
-### Step 2: Load Version-Specific Knowledge
-
-Based on detected version, load:
-- `odoo-security-guide-{version}.md` and the audit sweep table in `odoo-security-guide-all.md`
-- `odoo-model-patterns-{version}.md`
-- `odoo-module-generator-{version}.md`
-- `odoo-version-knowledge-all.md` (cross-version API availability) for the version-trap check
-
-### Step 3: Systematic Review
-
-Review each component category:
-
 ## Review Categories
+
+Checklists for the rules pass (step 4), one per component category:
 
 ### 1. Manifest Review
 - [ ] Version format correct
@@ -267,10 +238,11 @@ Each finding: file and line, defect, concrete failure scenario, fix, and the rul
 - `attrs`/`states` are the correct syntax (a bare `invisible="expr"` is not a record condition in 16.0)
 - Owl 2 patterns; `patch(obj, "name", ext)` with `this._super`
 - `@api.private` available
+- `odoo.tools.SQL` here is psycopg2's `sql.SQL`, a different API from the 17.0+ builder
 
 ### Odoo 17
 - Error on `attrs`/`states` in views (validation error)
-- `_read_group(domain, groupby, aggregates)` tuple API; `odoo.tools.SQL` builder for composed SQL
+- `_read_group(domain, groupby, aggregates)` tuple API (14.0-16.0: `read_group(domain, fields, groupby, lazy=...)` returning dicts); `odoo.tools.SQL` builder for composed SQL; `grouped()` available
 
 ### Odoo 18
 - `<list>` instead of `<tree>`; `view_mode="list,form"`
@@ -278,8 +250,9 @@ Each finding: file and line, defect, concrete failure scenario, fix, and the rul
 - Do not rely on imported test classes / inherited `test_*` methods being collected
 
 ### Odoo 19
-- Error on `_sql_constraints` (silently ignored) - use `models.Constraint`/`models.Index`
+- Error on `_sql_constraints` (silently ignored) - use `models.Constraint`/`models.Index`/`models.UniqueIndex`
 - `fields.Domain` instead of `expression.AND/OR`; `group_ids` instead of `groups_id` on users
+- `read_group` deprecated in favour of `formatted_read_group` (or `_read_group`)
 - Type hints and the `SQL` builder are **not** mandatory; parameterized string SQL is valid
 - Owl is 2.x (there is no Owl 3 in 14-19)
 

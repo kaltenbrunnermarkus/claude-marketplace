@@ -140,7 +140,7 @@ Only the official-guideline rules (Odoo `skills/`, verified against both sources
 | Access checks | `check_access_rights()` / `check_access_rule()` | deprecated -> `check_access()` / `has_access()` |
 | Restricted `odoo.tools.misc.pickle` | exists | removed (use JSON) |
 
-Unchanged in both: `odoo.tools.SQL`, `_search()` returning a `Query`, `_read_group(domain, groupby, aggregates)` returning tuples, `grouped()`, `_sql_constraints`, field `index=` values, `_check_company_auto`/`check_company`, domain combination with `odoo.osv.expression`, record rule eval context (`company_ids`, never `allowed_company_ids`).
+Unchanged in both (besides `SQL`, `_check_company_auto`/`check_company` and the rule eval context, see above): `_search()` returning a `Query`, `_read_group(domain, groupby, aggregates)` returning tuples, `grouped()`, `_sql_constraints`, field `index=` values, domain combination with `odoo.osv.expression`.
 
 ## Migration Checklist
 

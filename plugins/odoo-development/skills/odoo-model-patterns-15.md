@@ -119,11 +119,18 @@ class MyModel(models.Model):
     )
 ```
 
+- `related` through an x2many silently uses only the FIRST record of that x2many.
+- `related` is computed as superuser by default: `related_sudo=False` on sensitive chains.
+- Monetary: `currency_field` defaults to `currency_id`.
+- Reserved fields: `active` (archive with `action_archive()` / `action_unarchive()`), `state`, `parent_id` + `parent_path = fields.Char(index=True)` with `_parent_store = True`, `company_id` with `_check_company_auto = True` and `check_company=True` on relational fields.
+- `_inherits` delegates fields only, not methods.
+
 ## CRUD Methods
 
 ```python
 # Base create() is @api.model_create_multi in 15.0; override it the same way.
-# (@api.model on create() is silently wrapped and then creates one by one.)
+# (@api.model def create(self, vals) still works: silently wrapped, no warning,
+#  but then creates one by one.)
 @api.model_create_multi
 def create(self, vals_list):
     """Batch create - accepts a dict or a list of dicts from callers"""
@@ -209,7 +216,13 @@ _sql_constraints = [
     ('positive_amount', 'CHECK(amount >= 0)',
      'Amount must be positive!'),
 ]
+
+def init(self):
+    # multi-column index (no models.Index in 15.0; from odoo import tools)
+    tools.create_index(self._cr, 'my_model_company_state_index', self._table, ['company_id', 'state'])
 ```
+
+`index=True` on a field creates a plain btree index; only index fields that are searched AND selective. `@api.onchange` is UI-only: invariants belong in `@api.constrains` or `_sql_constraints`.
 
 ## X2many Operations
 
@@ -310,6 +323,8 @@ def replace_lines(self):
 </form>
 ```
 
+View inheritance: anchor on names, not positions. `<field name="x" position="after">` matches the FIRST `field` named `x` at any depth; other tags match the first node whose attributes all match. Use `xpath` for ambiguous targets; never re-add a field that already exists.
+
 ## Search and Actions
 
 ```python
@@ -389,7 +404,7 @@ class MyModel(models.Model):
         )
 ```
 
-## Official Odoo Guidelines (verified for 15.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 15.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 15.0 source; master-only APIs are translated to the 15.0 equivalent or marked as not available.
 
@@ -415,38 +430,6 @@ for record in self:
 - Iterate the recordset (prefetch works); `browse(id)` inside a loop prefetches only that id.
 - Put conditions into the search domain instead of `filtered()` after a broad search.
 - Create in batch: `self.env['my.model.line'].create([vals1, vals2, ...])`.
-
-### create() override
-
-```python
-@api.model_create_multi
-def create(self, vals_list):
-    for vals in vals_list:
-        vals.setdefault('code', self.env['ir.sequence'].next_by_code('my.model'))
-    return super().create(vals_list)
-```
-
-`@api.model def create(self, vals)` still works in 15.0 (silently wrapped, no warning) but loops record by record.
-
-### Constraints and indexes
-
-```python
-_sql_constraints = [
-    ('code_company_uniq', 'unique(code, company_id)', 'Code must be unique per company.'),
-]
-
-@api.constrains('date_start', 'date_end')
-def _check_dates(self):
-    for record in self:
-        if record.date_start and record.date_end and record.date_start > record.date_end:
-            raise ValidationError(_("End date must be after start date."))
-
-def init(self):
-    # multi-column index (no models.Index in 15.0)
-    tools.create_index(self._cr, 'my_model_company_state_index', self._table, ['company_id', 'state'])
-```
-
-(`from odoo import tools`.) `index=True` on a field creates a plain btree index; only index fields that are searched AND selective. `@api.onchange` is UI-only: invariants belong in `@api.constrains` or `_sql_constraints`.
 
 ### Translations
 
@@ -481,23 +464,14 @@ for partner, lines in groupby(lines, key=lambda l: l.partner_id):   # lines is a
   `odoo.tools.misc.clean_context(self.env.context)` before creating unrelated records.
 - `if records:` instead of `if len(records):`. Reading a field on a multi-record set raises `Expected singleton`: use `ensure_one()` in `action_*` methods.
 
-### Fields
-
-- `related` through an x2many silently uses only the FIRST record of that x2many.
-- `related` is computed as superuser by default: `related_sudo=False` on sensitive chains.
-- Monetary: `currency_field` defaults to `currency_id`.
-- Reserved fields: `active` (archive with `action_archive()` / `action_unarchive()`), `state`, `parent_id` + `parent_path = fields.Char(index=True)` with `_parent_store = True`, `company_id` with `_check_company_auto = True` and `check_company=True` on relational fields.
-- `_inherits` delegates fields only, not methods.
-
 ### Transactions
 
 - Never `self.env.cr.commit()` / `rollback()` on the request/cron cursor unless you own the cursor; justify every commit.
 - Catch specific exceptions; recover with `with self.env.cr.savepoint():` (flushes before and after; keep the number of savepoints per transaction low).
 - No `odoo.http.request` in model code: it is unbound in crons, RPC, tests and shell.
 
-### Views, QWeb, reports
+### QWeb, reports
 
-- View inheritance: anchor on names, not positions. `<field name="x" position="after">` matches the FIRST `field` named `x` at any depth; other tags match the first node whose attributes all match. Use `xpath` for ambiguous targets; never re-add a field that already exists.
 - `t-lang` is only effective on a node with `t-call`; on other nodes 15.0 silently ignores it (no error). Translate a block by extracting it into a template and calling it with `t-lang`.
 - A custom `_get_report_values()` (model `report.<report_name>`) must itself return `docs`, `doc_ids` and `doc_model`; the defaults are only provided when no such model exists.
 
@@ -505,7 +479,7 @@ for partner, lines in groupby(lines, key=lambda l: l.partner_id):   # lines is a
 
 1. **Use tracking=True** instead of track_visibility
 2. **Remove @api.multi** - methods iterate by default
-3. **Consider @api.model_create_multi** for batch creates
+3. **Use @api.model_create_multi** for every create override (see CRUD Methods)
 4. **Use super() without arguments** - Python 3 style
 5. **Leverage OWL 1.x** for custom frontend components
 

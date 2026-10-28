@@ -11,7 +11,7 @@
 
 | Component | v16 | v17 | Migration Required |
 |-----------|-----|-----|-------------------|
-| View visibility | `attrs` / `states` (the only record-dependent syntax in 16) | Python expressions (`invisible="state == 'draft'"`) | **REQUIRED** |
+| View visibility | `attrs` / `states` (the only record-dependent syntax in 16; a direct `invisible="state == 'x'"` is evaluated with only `context` and fails) | Python expressions on record fields (`invisible="state == 'draft'"`); `attrs`/`states` no longer supported | **REQUIRED** |
 | Create method | single-dict `@api.model` create logs a WARNING | still only a WARNING | Recommended (`@api.model_create_multi`) |
 | Python | 3.7+ | 3.10+ | Check compatibility |
 | Record rules | `company_ids` | `company_ids` | No change |
@@ -253,6 +253,8 @@ def create(self, vals_list):
 
 ## No Change Required
 
+Unchanged between 16.0 and 17.0 per the official guidelines (no action): `sudo()` bool only, `_allow_sudo_commands`, `related_sudo=True` default, `osv.expression.AND/OR`, RPC guard `get_public_method` + `@api.private`, route `auth` user/public/none and `type` http/json, CSRF defaults, `t-out` / deprecated `t-esc` / unescaped `t-raw`, `fields.NO_ACCESS`, `file_open`, restricted `tools.misc.pickle`, `consteq`, `ir.model.access` + `ir.rule` semantics and eval context (`user`, `time`, `company_ids`, `company_id`), Owl 2 escape helpers (`markup`, `htmlEscape`, `escape` from `@web/core/utils/strings`).
+
 ### Security Groups
 ```xml
 <!-- Same in v16 and v17 -->
@@ -287,14 +289,12 @@ Only rules of the official Odoo guidelines (odoo/odoo `skills/`, verified per ve
 
 | Topic | 16.0 | 17.0 |
 |---|---|---|
-| View modifiers | `attrs="{'invisible': [domain]}"` / `states=`; a direct `invisible="state == 'x'"` is evaluated with only `context` and fails | Python expressions on record fields (`invisible="state == 'x'"`); `attrs`/`states` no longer supported |
 | SQL builder | no master `SQL()`; `odoo.tools.SQL` is `psycopg2.sql.SQL`; identifiers via `psycopg2.sql.Identifier` | `odoo.tools.SQL("... %s", value)`, `SQL.identifier(name)` |
 | Custom SQL over ORM rows | `Model._search(dom).select('"t"."id"')` -> `(str, params)` | `Model._search(dom).select(SQL(...))` |
 | `_()` with Markup args | no escaping: `Markup(_("... %s")) % value` | escapes the other args when an argument is Markup |
 | `patch()` (JS) | `patch(obj, "name", {...})` + `this._super` | `patch(obj, {...})` + `super` |
-| Python | 3.7+ | 3.10+ |
 
-Unchanged between 16.0 and 17.0 (no action): `sudo()` bool only, `_allow_sudo_commands`, `related_sudo=True` default, `osv.expression.AND/OR`, RPC guard `get_public_method` + `@api.private`, route `auth` user/public/none and `type` http/json, CSRF defaults, `t-out` / deprecated `t-esc` / unescaped `t-raw`, `fields.NO_ACCESS`, `file_open`, restricted `tools.misc.pickle`, `consteq`, `ir.model.access` + `ir.rule` semantics and eval context (`user`, `time`, `company_ids`, `company_id`), Owl 2 escape helpers (`markup`, `htmlEscape`, `escape` from `@web/core/utils/strings`).
+View modifiers and Python version: see Overview of Security Changes. Unchanged rules: see No Change Required.
 
 ## Migration Checklist
 

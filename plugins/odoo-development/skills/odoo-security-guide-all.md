@@ -83,6 +83,8 @@ Access rights define CRUD (Create, Read, Update, Delete) permissions at the mode
 - One record per model/group combination
 - Permissions are additive (if any group grants access, user has access)
 - Missing access rights = no access (secure by default)
+- Defined in `security/ir.model.access.csv`: `id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink`. The access model is `ir.model.access` + `ir.rule`; there is **no** `ir.access` model and **no** `base.group_everyone` in 14.0-19.0 (both are master/20.0 only)
+- A row with an empty `group_id` applies to every user. Flag any create/write/unlink granted to `base.group_portal`, `base.group_public` or to an empty `group_id`; scrutinize even read on personal or business-sensitive models
 
 **Permission Matrix:**
 | Permission | Meaning |
@@ -98,11 +100,12 @@ Record rules filter which records a user can access within a model they have acc
 
 **Key Concepts:**
 - **Domain-based**: Uses Odoo domain syntax
-- **Global Rules**: Apply to all users (no group specified)
+- **Global Rules**: Apply to all users (no group specified). Do not set `<field name="global" eval="True"/>`: `global` is computed from `groups` (no groups = global)
 - **Group Rules**: Apply only to specific groups
 - **Combination**: Global rules are AND-ed together; all group rules that apply to the user (from any of the user's groups) are OR-ed together, and that union is then AND-ed with the global rules
-- **Per operation**: Each rule applies only to the operations flagged on it (`perm_read`, `perm_write`, `perm_create`, `perm_unlink`); a rule restricting only read leaves write governed by the other rules
+- **Per operation**: Each rule applies only to the operations flagged on it (`perm_read`, `perm_write`, `perm_create`, `perm_unlink`); a rule restricting only read leaves write governed by the other rules - cover all operations that need restricting
 - **No rules under sudo**: `sudo()` skips record rules entirely
+- **Domain eval context**: `user`, `time` (14.0-18.0), `company_ids`, `company_id`. `allowed_company_ids` is **not** available in record rules in any of 14.0-19.0
 
 **Rule Evaluation (14.0-19.0):**
 ```
@@ -162,6 +165,8 @@ sequence = self.env['ir.sequence'].sudo().next_by_code('my.model')
 record.sudo().write({'sensitive_field': value})  # DANGEROUS
 ```
 
+It is a finding when `sudo()` masks an `AccessError`, or an attacker controls the model/record/field read, the values created/written, or the domain searched; `record.sudo().write(post)` with raw request params (whitelist keys); a `with_user`/`with_company` switch driven by request data. `sudo(user)` in 14.0-15.0 is deprecated (warns, delegates to `with_user`); 16.0+ `sudo()` takes a bool only.
+
 ### Never Hardcode IDs
 
 Use XML IDs for references:
@@ -182,7 +187,7 @@ Multi-company is a critical security concern in Odoo.
 
 - **company_id**: Field linking record to a company
 - **company_ids**: User's allowed companies
-- **Record Rules**: Filter records by company
+- **Record Rules**: Filter records by company - every multi-company model needs a company rule
 
 ### Standard Pattern
 
@@ -270,6 +275,11 @@ self.env.cr.execute("SELECT * FROM res_partner WHERE name = %s", [user_input])
 self.env['res.partner'].search([('name', '=', user_input)])
 ```
 
+- Values: always `cr.execute(query, params)` (all versions); never `%`, `.format`, f-strings or `+` to put values into SQL.
+- Identifiers from user input: 14.0-16.0 `psycopg2.sql.Identifier`; 17.0+ `odoo.tools.SQL` + `SQL.identifier()` (validated by `assert`, skipped under `python -O`). In 16.0 `odoo.tools.SQL` is psycopg2's `sql.SQL` - a different API.
+- Raw SQL where the ORM would do is itself a finding: it bypasses ACL, record rules, `active`, translations and cache.
+- ORM-filtered custom SQL: 14.0-16.0 `query = Model._search(dom)` then `query.select('"t"."col"')` -> `(sql, params)` (may return `[]`, do not test `if query:`); 17.0+ `cr.execute(query.select(SQL(...)))`.
+
 ### Cross-Site Scripting (XSS)
 
 **Risk**: Unescaped user input in views
@@ -286,6 +296,9 @@ self.env['res.partner'].search([('name', '=', user_input)])
 ```
 
 `t-esc` still renders (escaped) in 15.0-19.0 as a deprecated alias of `t-out`; use `t-out` in new code from 15.0. In 15.0+ the raw-HTML vector is a `Markup` value (Python) or `markup()` (Owl 2, 16.0+) built from non-literal content and reaching `t-out`.
+
+- `Markup(f"...{x}")` is a finding: the f-string defeats escaping. `_()` escapes Markup args only from 17.0.
+- JS sinks (`markup(`, `innerHTML`, `insertAdjacentHTML`) are findings when user/low-privilege content reaches them. 14.0-15.0 Owl 1 (no `markup`); 16.0+ Owl 2 `markup`/`htmlEscape` from `@odoo/owl`; 18.0+ `@web/core/utils/html` (`setElementContent`, ...); there is no `setInnerHtml` in 14-19.
 
 ### Insecure Direct Object Reference (IDOR)
 
@@ -314,22 +327,24 @@ record.check_access('read')
 value = record.sudo().sensitive_data
 ```
 
-## Security Audit Sweep (Official Odoo Guidelines, verified for 14.0-19.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 14.0-19.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/odoo-security`, branch 20.0) and were checked against the 14.0-19.0 sources; master-only APIs are translated to the version equivalent or marked as not available.
 
-**Process:** review the `security/` data files against the access model (below), then sweep the addon for every pattern in the table and judge each hit against its rule. A hit is not a finding by itself; the "finding when" column says what makes it one. Report each finding with severity, exact file/line and a minimal fix. The audit is complete when every pattern has been swept and every hit judged.
+### Security Audit Sweep
+
+**Process:** review the `security/` data files against the access model (see Access Rights and Record Rules), then sweep the addon for every pattern in the table and judge each hit against its rule. A hit is not a finding by itself; the "finding when" column says what makes it one. Report each finding with severity, exact file/line and a minimal fix. The audit is complete when every pattern has been swept and every hit judged.
 
 | Sweep for | Finding when | Version notes |
 |---|---|---|
-| `sudo(`, `with_user(`, `with_company(` | sudo used to mask an AccessError, or an attacker controls the model/record/field read, the values created/written, or the domain searched; `record.sudo().write(post)` with raw request params (whitelist keys); a `with_user`/`with_company` switch driven by request data | `sudo(user)` in 14.0-15.0 is deprecated (warns, delegates to `with_user`); 16.0+ `sudo()` takes a bool only |
+| `sudo(`, `with_user(`, `with_company(` | elevated or switched env driven by attacker input | see Avoid sudo() Abuse |
 | x2many values written under `sudo()` | raw request values contain command lists: commands run as sudo **on the comodel** unless it sets `_allow_sudo_commands = False` - whitelist command lists too | 14.0: tuples `(0, 0, vals)`; 15.0+: `Command.*` (tuples still accepted) |
 | `related=` crossing models | sensitive value reachable through a user-writable Many2one (related fields are computed as superuser by default, `related_sudo=True`); related onto `ir.attachment` = arbitrary file read | set `related_sudo=False` on sensitive chains (all versions) |
-| `cr.execute`, `SQL(`, `%`/`.format`/f-string/`+` near SQL | values interpolated instead of passed as parameters; identifiers from user input; raw SQL where the ORM would do (bypasses ACL, rules, `active`, translations, cache) | params: `cr.execute(query, params)` (all). Identifiers: 14.0-16.0 `psycopg2.sql.Identifier`; 17.0+ `odoo.tools.SQL` + `SQL.identifier()` (validated by `assert`, skipped under `python -O`). In 16.0 `odoo.tools.SQL` is psycopg2's `sql.SQL` - a different API. ORM-filtered custom SQL: 14.0-16.0 `query = Model._search(dom)` then `query.select('"t"."col"')` -> `(sql, params)` (may return `[]`, do not test `if query:`); 17.0+ `cr.execute(query.select(SQL(...)))` |
+| `cr.execute`, `SQL(`, `%`/`.format`/f-string/`+` near SQL | interpolated values, user-supplied identifiers, raw SQL where the ORM would do | see SQL Injection |
 | domain built from request/RPC/stored values | a user-supplied list concatenated onto a security domain (`'|'` injection widens access) | 14.0-18.0 `odoo.osv.expression.AND([...])`/`OR`; 19.0 `odoo.fields.Domain` (`&`, `|`, `~`; `expression.*` deprecated) |
 | public (non-`_`) model methods | method callable over RPC trusts `self` or its arguments (access control is enforced on CRUD, not on method calls) | RPC guard 14.0-15.0: `check_method_name` blocks `_*` and `init`; 16.0+: `get_public_method` also honours `@api.private` and unsafe attributes; 19.0 also blocks classmethod/staticmethod. `@api.private` is 16.0+ - in 14.0-15.0 rename with `_` |
 | `@http.route(`, bare `@route(` | `public`/`none` route exposing internal data or privileged writes; state change on GET; `csrf=False` on a `type='http'` route that is not a dedicated webhook; POST template without `csrf_token` input | `auth`: `user`/`public`/`none`; 18.0+ also `bearer` (no `bearer_scope`). `type`: `http`/`json`; 19.0 `http`/`jsonrpc`/`json2` (`json` = deprecated alias). JSON routes have no CSRF token check by design. Overriding a route method without `@http.route()`: 14.0-15.0 silently drops the URL; 16.0+ auto-decorates with a warning |
-| `t-raw`, `Markup(`, `markup(` (JS), `innerHTML`, `insertAdjacentHTML` | user/low-privilege content reaches a raw sink; `Markup(f"...{x}")` (f-string defeats escaping) | Server QWeb: 14.0 `t-esc` escapes, `t-raw` raw, no `t-out`; 15.0+ `t-out` escapes, `t-esc` deprecated alias, `t-raw` deprecated but still raw. `_()` escapes Markup args only from 17.0. JS: 14.0-15.0 Owl 1 (no `markup`); 16.0+ Owl 2 `markup`/`htmlEscape` from `@odoo/owl`; 18.0+ `@web/core/utils/html` (`setElementContent`, ...); there is no `setInnerHtml` in 14-19 |
+| `t-raw`, `Markup(`, `markup(` (JS), `innerHTML`, `insertAdjacentHTML` | user/low-privilege content reaches a raw sink | see Cross-Site Scripting (XSS) |
 | password/token/secret fields | readable via `search_read` because of a permissive access row | `groups="base.group_system"` or `groups=fields.NO_ACCESS` (all versions) |
 | `open(` | path can be influenced | `odoo.tools.file_open` (all versions; confined to addons paths, root path and registered temp dirs, existing files only; it is a path confinement, not a write protection) |
 | `eval(`, `exec(`, `safe_eval` | builtin `eval`/`exec` at all; `safe_eval` on input from non-privileged users | prefer `json.loads`/`ast.literal_eval`; `odoo.tools.safe_eval` rejects `__` names and unsafe attributes (all versions); `--unsafe-policy` does not exist in 14-19 |
@@ -338,14 +353,6 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/odoo-sec
 | `==` comparing a secret/token | timing leak | `odoo.tools.consteq` (all versions), or look the token up in the database |
 | `def f(..., x=[])` / `x={}` | mutable default argument | `None` + create inside |
 | public methods returning rich objects | reachable from `safe_eval`'d code (server actions, automation rules) | move to a module-level function or a dunder name |
-
-### Access model audit (14.0-19.0)
-
-- The access model is `ir.model.access` (`security/ir.model.access.csv`: `id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink`) + `ir.rule`. There is **no** `ir.access` model and **no** `base.group_everyone` in 14.0-19.0 (both are master/20.0 only).
-- Flag any create/write/unlink granted to `base.group_portal`, `base.group_public` or to a row with an empty `group_id` (= every user); scrutinize even read on personal or business-sensitive models.
-- Rules apply per operation flag: a restriction covering only `perm_read` leaves write governed by the other rules - cover all operations that need restricting.
-- Multi-company models need a company rule; `ir.rule` domain eval context is `user`, `time` (14.0-18.0), `company_ids`, `company_id`. `allowed_company_ids` is **not** available in record rules in any of 14.0-19.0.
-- Do not set `<field name="global" eval="True"/>` on `ir.rule`: `global` is computed from `groups` (no groups = global).
 
 ## Security Testing Checklist
 

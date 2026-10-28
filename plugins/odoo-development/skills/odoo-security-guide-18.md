@@ -41,6 +41,10 @@
 
 ## Access Rights (v18)
 
+- Two access models: `ir.model.access` (`security/ir.model.access.csv`) and `ir.rule`. There is no `ir.access` and no `base.group_everyone` in 18.
+- Default deny: a model without an ACL row is inaccessible except under sudo; module loading logs "The models [...] have no access rules".
+- An ACL row with an empty `group_id` grants that permission to everyone. Flag create/write/unlink granted to an empty group, `base.group_portal` or `base.group_public`.
+
 ### ir.model.access.csv
 
 ```csv
@@ -51,12 +55,13 @@ access_custom_model_manager,custom.model.manager,model_custom_model,custom_modul
 
 ## Record Rules (v18 Syntax)
 
+- Global rules (no groups; `global` is computed) are AND-ed; the rules of all groups the user belongs to are OR-ed together into one block; result = global rules AND (group rules OR-ed). Two non-overlapping global rules lock everybody out.
+- A rule only applies to the operations whose `perm_*` flag is set; a rule with only `perm_write` leaves read/create/unlink governed by the other rules.
+- Rule domains are evaluated with `user`, `time`, `company_ids` and `company_id` only. `allowed_company_ids` is not available (install fails with "Invalid domain").
+
 ### Multi-Company Rule (v18 Pattern)
 
 ```xml
-<!-- v18: rule domains are evaluated with user, time, company_ids, company_id.
-     `allowed_company_ids` is NOT available (install fails with "Invalid domain").
-     A rule without groups is global automatically (`global` is computed). -->
 <record id="rule_custom_model_company" model="ir.rule">
     <field name="name">Custom Model: Multi-Company</field>
     <field name="model_id" ref="model_custom_model"/>
@@ -130,7 +135,8 @@ class SecureModel(models.Model):
             raise AccessError(_("Only managers can perform this action."))
 
         # Check ACL + record rules in one call (v18: check_access_rights()/
-        # check_access_rule() are deprecated and emit DeprecationWarning)
+        # check_access_rule() are deprecated and emit DeprecationWarning).
+        # Non-raising variants: has_access('write'), _filtered_access('write')
         self.check_access('write')
 
         # Perform operation
@@ -169,7 +175,19 @@ class SecureModel(models.Model):
         )
         self.env.cr.execute(query)
         return self.env.cr.dictfetchall()
+
+    def _get_ids_in(self, ids):
+        # Values as parameters, never string formatting (%, +, .format, f-string)
+        self.env.cr.execute(SQL("SELECT name FROM custom_secure WHERE id IN %s", tuple(ids)))
+        return self.env.cr.fetchall()
+
+    def _get_filtered_ids(self, domain):
+        # Raw SQL over ORM-filtered rows (record rules applied by _search)
+        query = self._search(domain)
+        return self.env.execute_query(query.select(SQL.identifier(self._table, 'id')))
 ```
+
+Identifiers: `SQL.identifier(name)` or `SQL.identifier(table, column)`.
 
 ## View Security (v18 Syntax)
 
@@ -430,7 +448,7 @@ access_audit_auditor,audit.auditor,model_custom_audit_log,custom_module.group_au
 </odoo>
 ```
 
-## Official Odoo Guidelines (verified for 18.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 18.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 18.0 source; master-only APIs are translated to their 18.0 equivalent or marked as not available.
 
@@ -442,30 +460,20 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 | `with_user()` / `with_company()` | switch not intentional (e.g. `with_user(SUPERUSER_ID)` as a sudo workaround) | `with_user(user)` sets su=False; `with_company(company)` rewrites `allowed_company_ids` in the context |
 | x2many commands under sudo | sensitive comodel receives `Command` payloads from user input in a sudo env | set `_allow_sudo_commands = False` on the comodel: commands then run as `sudo(False).with_user(env.uid_origin)` |
 | `related=` fields | sudo-computed chain exposes data the user may not read (e.g. related onto `ir.attachment` content) | related fields are computed as superuser by default (`related_sudo=True` -> `compute_sudo`); use `related_sudo=False` on sensitive chains |
-| raw SQL | string formatting (`%`, `+`, `.format`, f-string) builds the query | `self.env.cr.execute(SQL("... WHERE id IN %s", tuple(ids)))`, identifiers `SQL.identifier(name[, column])`; over ORM-filtered rows: `query = self._search(domain)` then `self.env.execute_query(query.select(SQL.identifier(self._table, 'id')))` |
+| raw SQL | string formatting (`%`, `+`, `.format`, f-string) builds the query | `SQL()` with parameters, see Secure SQL Queries |
 | domains | user-supplied list concatenated onto a security domain | `from odoo.osv import expression`; `expression.AND([security_domain, user_domain])` (there is no `odoo.fields.Domain` in 18) |
 | public model methods | a method without `_` prefix does something unsafe with attacker args | RPC guard `odoo.service.model.get_public_method` blocks `_` names, `@api.private` methods and `_UNSAFE_ATTRIBUTES`. It does **not** block classmethods/staticmethods -> prefix them with `_` |
 | routes `auth` | exposure does not match (`public`/`none` on data-changing code) | `user`, `bearer` (API key in `Authorization: Bearer`, no `bearer_scope` parameter in 18), `public`, `none` |
 | routes `type` / CSRF | state change on GET; `csrf=False` on a browser-facing `type='http'` route | only `type='http'` and `type='json'` exist; http routes check CSRF for every non-GET/HEAD/OPTIONS/TRACE request; json routes have no token check (JSON content type); writes use `methods=['POST']`; forms include `<input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>` |
 | server QWeb | `t-raw` anywhere; `Markup(user_value)`; f-string HTML then wrapped in `Markup` | use `t-out` (escapes). In 18 `t-raw` still renders **unescaped** (deprecation warning) and `t-esc` is a working, escaping alias of `t-out`. Build HTML with `Markup("<p>%s</p>") % value` or `Markup("<p>{}</p>").format(value)`; `_()` escapes the translation when an argument is `Markup` |
 | JS XSS | `innerHTML`/`insertAdjacentHTML`/`markup()` on non-literal content | `htmlEscape()` and `setElementContent(el, content)` from `@web/core/utils/html` (also `htmlEscape` from `@odoo/owl`); Owl `markup` as tagged template (``markup`<b>${value}</b>` ``) escapes placeholders. `setInnerHtml` and `htmlJoin` do not exist in 18 |
-| field `groups` | password/token/secret field readable on a permissive model | `groups="base.group_system"` or `groups=fields.NO_ACCESS`; restricted fields disappear from `fields_get` and explicit read/write raises `AccessError` |
+| field `groups` | password/token/secret field readable on a permissive model | `groups="base.group_system"` or `groups=fields.NO_ACCESS`, see Field-Level Security |
 | files | builtin `open()` on a path the user can influence | `odoo.tools.file_open(path, mode='r', filter_ext=(), env=None)`: confined to addons paths, the Odoo root and `file_open_temporary_directory()` dirs; the file must already exist |
 | `eval`/`exec` | any use on user data | `json.loads` / `ast.literal_eval`; `odoo.tools.safe_eval.safe_eval` only for trusted (admin-defined) expressions; it rejects names containing `__` |
 | `getattr`/`setattr` on records | field name comes from input | `record[field_name]` |
 | `pickle` | any use | 18 ships no restricted pickle wrapper (`odoo/tools/pickle.py` removed); use json |
 | secret comparison | `token == expected` | `odoo.tools.consteq(a, b)`, or look the token up in the database |
 | mutable defaults | `def m(self, vals={})` | `vals=None` then `vals = vals or {}` |
-
-### Access model in 18.0
-
-- Two models: `ir.model.access` (`security/ir.model.access.csv`) and `ir.rule`. There is no `ir.access` and no `base.group_everyone` in 18.
-- Default deny: a model without an ACL row is inaccessible except under sudo; module loading logs "The models [...] have no access rules".
-- An ACL row with an empty `group_id` grants that permission to everyone. Flag create/write/unlink granted to an empty group, `base.group_portal` or `base.group_public`.
-- Record rules: global rules (no groups) are AND-ed; the rules of all groups the user belongs to are OR-ed together into one block; result = global rules AND (group rules OR-ed). Two non-overlapping global rules lock everybody out.
-- A rule only applies to the operations whose `perm_*` flag is set; a rule with only `perm_write` leaves read/create/unlink governed by the other rules.
-- Rule domains are evaluated with `user`, `time`, `company_ids` and `company_id` only. Multi-company: `['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]`. `allowed_company_ids` is not available.
-- Use `records.check_access('write')`, `has_access()` and `_filtered_access()`; `check_access_rights()`/`check_access_rule()` are deprecated since 18.0.
 
 ## v18 Security Checklist
 

@@ -278,7 +278,10 @@ registry.category("systray").add("{module_name}.{SystrayName}", systrayItem, { s
 },
 ```
 
-## Official Odoo Guidelines (verified for 16.0)
+- Assets ship in the module through the manifest `assets` key; third-party libraries go unminified into `static/lib/`.
+- Organize `static/src/` by feature (`static/src/my_feature/my_feature.js|.xml|.scss`), not by file type.
+
+## Additional Rules from Odoo's Official Guidelines (verified for 16.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 16.0 source; master-only APIs are translated to the 16.0 equivalent or marked as not available.
 
@@ -314,9 +317,7 @@ patch(FormController.prototype, "my_module.FormController", {
 ```
 `patch(obj, { ... })` without a name and `super.method()` are 17.0+ and fail in 16.0 ("Incorrect use of patch").
 
-### Organization and assets
-- Organize `static/src/` by feature (`static/src/my_feature/my_feature.js|.xml|.scss`), not by file type.
-- Assets ship in the module through the manifest `assets` key; third-party libraries go unminified into `static/lib/`.
+### SCSS
 - SCSS: 4-space indentation, properties ordered outside-in (position, box model, typography, decoration), classes prefixed `o_<module>_`, use Bootstrap/Odoo `$o-...` variables, no CSS custom properties on `:root`.
 
 ## v16 OWL 2.x Checklist

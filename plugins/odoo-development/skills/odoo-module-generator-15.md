@@ -66,6 +66,12 @@
 }
 ```
 
+- `depends`: list direct dependencies only. 15.0 does NOT add `base` automatically to an empty `depends`: if the module needs nothing else, write `'depends': ['base']`.
+- `license`: missing key defaults to `LGPL-3` (with a warning) - always set it explicitly.
+- `auto_install`: `True` (all of `depends`) or a list that must be a subset of `depends`.
+- `assets`: globs and `('include', ...)`, `('remove', ...)`, `('prepend', ...)` directives are supported. JS/SCSS in `web.assets_backend` / `web.assets_frontend`, QWeb/Owl XML in `web.assets_qweb`. There is no `<asset>` XML tag in 15.0.
+- `application: True` only for full apps; `data` loads in list order (security groups before ACL CSV before views/menus); `demo` only demo data.
+
 ## Model Template (v15)
 
 ```python
@@ -336,17 +342,9 @@ def action_confirm(self):
     ...
 ```
 
-## Official Odoo Guidelines (verified for 15.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 15.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 15.0 source; master-only APIs are translated to the 15.0 equivalent or marked as not available.
-
-### Manifest facts (15.0)
-
-- `depends`: list direct dependencies only. 15.0 does NOT add `base` automatically to an empty `depends`: if the module needs nothing else, write `'depends': ['base']`.
-- `license`: missing key defaults to `LGPL-3` (with a warning) - always set it explicitly.
-- `auto_install`: `True` (all of `depends`) or a list that must be a subset of `depends`.
-- `assets`: supported (globs and `('include', ...)`, `('remove', ...)`, `('prepend', ...)` directives). JS/SCSS in `web.assets_backend` / `web.assets_frontend`, QWeb/Owl XML in `web.assets_qweb`. There is no `<asset>` XML tag in 15.0.
-- `application: True` only for full apps; `data` loads in list order (security groups before ACL CSV before views/menus); `demo` only demo data.
 
 ### Structure and naming
 
@@ -423,4 +421,4 @@ When generating an Odoo 15.0 module:
 6. **INCLUDE** `assets` key in manifest (XML templates in `web.assets_qweb`)
 7. **USE** `@api.model_create_multi` for `create` overrides
 8. **DO NOT** use direct `invisible`/`readonly` (v17+)
-9. **FOLLOW** "Official Odoo Guidelines (verified for 15.0)" above
+9. **FOLLOW** "Additional Rules from Odoo's Official Guidelines (verified for 15.0)" above

@@ -90,6 +90,8 @@ Type hints on fields/methods are optional in every version 14-19 (core code has 
 | `_sql_constraints` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ IGNORED (warning only) |
 | `models.Constraint` / `Index` / `UniqueIndex` | ➖ | ➖ | ➖ | ➖ | ➖ | ✅ |
 
+Before 19.0, constraints and custom indexes are declared with `_sql_constraints` and `init()` + `tools.create_index`.
+
 ### SQL Operations
 
 | Pattern | v14 | v15 | v16 | v17 | v18 | v19 |
@@ -128,37 +130,19 @@ String SQL with parameters is not deprecated in any version; it must never be bu
 
 `allowed_company_ids` is a **context** key, not a record-rule variable: a rule domain using it fails validation. Use `[('company_id', 'in', company_ids)]` (or `company_ids + [False]`) in every version.
 
-## Cross-Version API Availability (Official Odoo Guidelines, verified for 14.0-19.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 14.0-19.0)
 
-Condensed from a version-by-version check of Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) against the 14.0-19.0 sources. yes = exists/works as master; - = absent.
+Condensed from a version-by-version check of Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) against the 14.0-19.0 sources. yes = exists/works as master; - = absent. Items already covered by the tables above and the migration path summary below are not repeated here.
 
 | Topic | 14 | 15 | 16 | 17 | 18 | 19 |
 |---|---|---|---|---|---|---|
 | `sudo(user)` | deprecated -> `with_user` | same | - (bool only) | - | - | - |
-| `Command` / `from odoo import Command` | - (tuples) | yes | yes | yes | yes | yes |
-| `odoo.tools.SQL` builder + `SQL.identifier` | - | - | - (psycopg2 `sql.SQL`) | yes | yes | yes |
 | ORM-filtered custom SQL | `query.select('"t"."c"')` -> (sql, params) | same | same | `query.select(SQL(...))` | same | same |
-| combine domains | `expression.AND/OR` | same | same | same | same | `fields.Domain` (`expression.*` deprecated) |
-| RPC guard | `check_method_name` | same | `get_public_method` + `@api.private` | same | same | + blocks class/staticmethods |
-| route `auth` | user/public/none | same | same | same | + `bearer` | same |
-| route `type` | http/json | same | same | same | same | http/jsonrpc/json2 (`json` alias) |
 | route override without `@route` | URL dropped silently | same | auto-decorated + warning | same | same | same |
-| QWeb `t-out` | - | yes | yes | yes | yes | yes |
-| `_()` escapes Markup args | - | - | - | yes | yes | yes |
+| translation | `_()` (`%` args), `_lt` | same | same | + `_()` escapes Markup args, `tools.format_list` | `self.env._`, `LazyTranslate`, `_lt` | + list args formatted per language |
 | JS escaping | Owl 1, none | Owl 1, none | Owl 2 `markup`/`htmlEscape` | same | + `@web/core/utils/html` | + `htmlJoin`, `htmlSprintf`, ... |
-| restricted `odoo.tools.misc.pickle` | yes (prefer json) | yes | yes | yes | removed | removed |
-| `grouped()` | - (`tools.groupby`) | - | - | yes | yes | yes |
-| aggregate API | `read_group(dom, fields, groupby, lazy)` -> dicts | same | same (`_read_group` same signature) | `_read_group(dom, groupby, aggregates)` -> tuples | same | same; `read_group` deprecated -> `formatted_read_group` |
-| translation | `_()` (`%` args), `_lt` | same | same | + Markup escape, `tools.format_list` | `self.env._`, `LazyTranslate`, `_lt` | + list args formatted per language |
-| constraints/indexes | `_sql_constraints`, `init()` + `tools.create_index` | same | same | same | same | `models.Constraint`/`Index`/`UniqueIndex` |
-| manifest: `base` injected for empty `depends` | - (declare `['base']`) | - | - | - | - | yes |
-| `t-lang` without `t-call` | silently ignored | silently ignored | SyntaxError | SyntaxError | SyntaxError | SyntaxError |
-| test default tags | `standard`, `at_install` | same | same | same | same | same |
-| class-level test fixtures | `SavepointCase` | `TransactionCase` | same | same | same (no `SavepointCase`) | same |
+| class-level test fixtures | `SavepointCase` | `TransactionCase` (`SavepointCase` deprecated alias) | same | same (no `SavepointCase`) | same | same |
 | `BaseCommon` / `BaseUsersCommon` | - | - | yes / yes | yes / yes | yes / yes | yes (+ optional user/company hooks) / - |
-| imported test classes / inherited `test_*` methods | collected | collected | collected | collected | skipped unless `allow_inherited_tests_method = True` | same |
-| Owl `computed` | - | - | - | - | - | - |
-| min Python | 3.6 | 3.7 | 3.7 | 3.10 | 3.10 | 3.10 |
 
 ### Master/20.0-only - never use in 14.0-19.0
 
@@ -171,7 +155,7 @@ Odoo's official skills are written for master (20.0). These items do **not** exi
 | Owl `computed` | plain getters |
 | `populate.blueprint` | the populate framework of the version (or none) |
 | `--unsafe-policy` server option | none; never `eval`, restrict `safe_eval` to trusted users |
-| tests defaulting to `post_install` | default is `at_install`; write `@tagged('post_install', '-at_install')` |
+| tests defaulting to `post_install` | default tags are `standard`, `at_install`; write `@tagged('post_install', '-at_install')` |
 | `t-esc` "renders nothing" | in 14.0-19.0 `t-esc` still renders, escaped |
 | tour step `expectUnloadPage` | not verified for 14.0-19.0 - do not emit |
 
@@ -231,35 +215,37 @@ Always declare `'depends': ['base']` when there is no other dependency (only 19.
 
 ### v15 → v16
 1. Owl 1 → Owl 2 (`patch(obj, name, ext)` keeps `this._super`)
-2. `@api.private` available; RPC guard is `get_public_method`
+2. `@api.private` available; RPC guard is `get_public_method` (14.0-15.0: `check_method_name`)
 3. Field `index` accepts `'btree_not_null'` / `'trigram'`
 4. Single-dict `@api.model` create overrides now log a warning: use `@api.model_create_multi`
-5. `t-lang` without `t-call` now raises SyntaxError
+5. `t-lang` without `t-call` now raises SyntaxError (silently ignored in 14.0-15.0)
 6. Keep `attrs`/`states` - they are still the correct syntax in 16.0
 
 ### v16 → v17
 1. **MUST** replace all `attrs` and `states` with direct expressions (`invisible="..."`, `readonly="..."`, `required="..."`, `column_invisible`) - views using them fail validation
-2. `_read_group(domain, groupby, aggregates)` returns tuples; `grouped()` available
+2. `_read_group(domain, groupby, aggregates)` returns tuples (14.0-16.0: `read_group(dom, fields, groupby, lazy)` -> dicts; 16.0 `_read_group` has that same old signature); `grouped()` available (14.0-16.0: `tools.groupby`)
 3. `odoo.tools.SQL` builder available (`SQL.identifier`)
 4. `patch(obj, ext)` with `super` (no patch name)
 5. Legacy `odoo.define(name, function (require) {...})` modules are no longer supported
 6. Python 3.10+
+7. `SavepointCase` removed (deprecated alias in 15.0-16.0)
 
 ### v17 → v18
 1. View type `tree` → `list` (`<list>`, `view_mode='list,form'`)
 2. `check_access_rights`/`check_access_rule` → `check_access()`/`has_access()`
 3. `self.env._()` and `LazyTranslate` for translations
 4. Imported test classes and inherited `test_*` methods are no longer collected (`allow_inherited_tests_method = True`)
-5. `SavepointCase` removed; restricted `pickle` wrapper removed
-6. Route `auth='bearer'` available
+5. Restricted `pickle` wrapper removed
+6. Route `auth='bearer'` available (14.0-17.0: `user`/`public`/`none` only)
 
 ### v18 → v19
 1. **MUST** replace `_sql_constraints` with `models.Constraint` / `models.Index` / `models.UniqueIndex` (`_sql_constraints` is silently ignored)
-2. `odoo.fields.Domain` replaces `osv.expression.AND/OR`
+2. `odoo.fields.Domain` replaces `osv.expression.AND/OR` (`expression.*` deprecated)
 3. `read_group` deprecated → `_read_group` / `formatted_read_group`
 4. `res.users.groups_id` → `group_ids`
-5. Route type `json` → `jsonrpc` (alias kept)
+5. Route type `json` → `jsonrpc` (alias kept); new type `json2`
 6. `time` no longer in record-rule eval context
+7. RPC guard also blocks classmethods/staticmethods
 
 ## Quick Reference Cards
 

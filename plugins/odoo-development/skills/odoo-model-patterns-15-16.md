@@ -13,7 +13,7 @@
 Migration from v15 to v16 is **non-breaking** for model code. The main changes are:
 - `index=` accepts `'trigram'` / `'btree_not_null'`
 - a single-dict `@api.model` `create` override now logs a warning: use `@api.model_create_multi`
-- `t-lang` without `t-call` raises at template compile
+- `t-lang` without `t-call` raises a SyntaxError at template compile (15.0 silently ignored it)
 - `attrs` stays the correct view syntax in 16.0 (direct expressions are 17.0+)
 
 ## Command Class (already available in 15.0)
@@ -155,9 +155,11 @@ state = fields.Selection([...], index=True)          # For filtering
 
 ### Index Types
 
+15.0 accepts only a bool (`index=True`); the string values are 16.0+.
+
 | Type | Use Case |
 |------|----------|
-| `index=True` | Standard B-tree index |
+| `index=True` / `index='btree'` | Standard B-tree index |
 | `index='trigram'` | For ILIKE/pattern searches |
 | `index='btree_not_null'` | B-tree excluding NULL |
 
@@ -303,11 +305,10 @@ record condition in 16.0; convert to direct expressions only when migrating to 1
 
 ## Official guideline deltas 15.0 -> 16.0
 
+`index=`, `create()` warning and `t-lang` are covered above.
+
 | Topic | 15.0 | 16.0 |
 |---|---|---|
-| `index=` | bool only (`index=True`) | `True`/`'btree'`, `'btree_not_null'`, `'trigram'` |
-| `@api.model` single-dict `create` override | silently wrapped | works, logs a warning |
-| `t-lang` without `t-call` | silently ignored | SyntaxError at compile |
 | `sudo(user)` | deprecated alias of `with_user(user)` | removed (bool only) |
 | `@api.private` | absent (use `_` prefix) | available |
 | `odoo.tools.SQL` | absent | psycopg2 `sql.SQL` (not the 17.0+ builder) |

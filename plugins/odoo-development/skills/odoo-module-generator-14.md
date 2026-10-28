@@ -56,6 +56,23 @@
 }
 ```
 
+### Manifest facts (14.0)
+- `depends`: list direct dependencies only. 14.0 does NOT inject `base` when `depends` is empty; `base` is always loaded first, so list `'base'` only when there is no other dependency.
+- `license` defaults to `'LGPL-3'` when omitted (declare it anyway).
+- `auto_install` may be `True` (all depends) or a list that must be a subset of `depends`.
+- `application`: only for full apps (default `False`). `external_dependencies`: `{'python': [...], 'bin': [...]}`, checked at install.
+- NO `assets` key in 14.0. Static files go in via an XML data file that inherits the bundle template:
+  ```xml
+  <template id="assets_backend" inherit_id="web.assets_backend" name="my_module assets">
+      <xpath expr="." position="inside">
+          <script type="text/javascript" src="/my_module/static/src/js/my_widget.js"/>
+          <link rel="stylesheet" type="text/scss" href="/my_module/static/src/scss/my_module.scss"/>
+      </xpath>
+  </template>
+  ```
+  Client-side QWeb templates are listed in the manifest key `'qweb': ['static/src/xml/my_templates.xml']`.
+- Data file tags in 14.0: `record`, `template`, `menuitem`, `report`, `act_window`, `function`, `delete`. There is no `<asset>` tag. `noupdate="1"` works on `<odoo>` and on `<data>`. `<template active="False">` is applied only on install, not on update.
+
 ## Model Template (v14)
 
 ```python
@@ -300,26 +317,9 @@ state = fields.Selection([...], tracking=True)
                         'required': [('type', '=', 'invoice')]}"/>
 ```
 
-## Official Odoo Guidelines (verified for 14.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 14.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 14.0 source; master-only APIs are translated to the 14.0 equivalent or marked as not available.
-
-### Manifest facts (14.0)
-- `depends`: list direct dependencies only. 14.0 does NOT inject `base` when `depends` is empty; `base` is always loaded first, so list `'base'` only when there is no other dependency.
-- `license` defaults to `'LGPL-3'` when omitted (declare it anyway).
-- `auto_install` may be `True` (all depends) or a list that must be a subset of `depends`.
-- `application`: only for full apps (default `False`). `external_dependencies`: `{'python': [...], 'bin': [...]}`, checked at install.
-- NO `assets` key in 14.0. Static files go in via an XML data file that inherits the bundle template:
-  ```xml
-  <template id="assets_backend" inherit_id="web.assets_backend" name="my_module assets">
-      <xpath expr="." position="inside">
-          <script type="text/javascript" src="/my_module/static/src/js/my_widget.js"/>
-          <link rel="stylesheet" type="text/scss" href="/my_module/static/src/scss/my_module.scss"/>
-      </xpath>
-  </template>
-  ```
-  Client-side QWeb templates are listed in the manifest key `'qweb': ['static/src/xml/my_templates.xml']`.
-- Data file tags in 14.0: `record`, `template`, `menuitem`, `report`, `act_window`, `function`, `delete`. There is no `<asset>` tag. `noupdate="1"` works on `<odoo>` and on `<data>`. `<template active="False">` is applied only on install, not on update.
 
 ### File structure and naming
 - One model per file, named after the model: `models/my_model.py`. Views go in `views/my_model_views.xml`, `views/my_module_menus.xml`, `views/my_module_templates.xml`; data in `data/my_module_data.xml`; demo in `demo/my_module_demo.xml`; security in `security/ir.model.access.csv` + `security/my_module_security.xml`.

@@ -44,7 +44,16 @@ access_custom_model_user,custom.model.user,model_custom_model,custom_module.grou
 access_custom_model_manager,custom.model.manager,model_custom_model,custom_module.group_custom_manager,1,1,1,1
 ```
 
+- Model access is `ir.model.access` (`security/ir.model.access.csv`); row-level is `ir.rule`. There is no `ir.access` / `ir.access.csv` in 16.0.
+- A model without any access row is inaccessible to non-superusers; module loading logs "The models [...] have no access rules".
+- An access row with empty `group_id` applies to everyone (there is no `base.group_everyone` group). Flag create/write/unlink granted to `base.group_portal`, `base.group_public` or to an empty group.
+- Access rights and rules are per operation (`perm_read/write/create/unlink`); a rule with only `perm_write` does not restrict reading.
+
 ## Record Rules (v16 Syntax)
+
+- Rule combination: all global rules (no groups) are AND-ed; all group rules matching any of the user's groups are OR-ed together, then AND-ed with the globals. Non-overlapping global rules lock everyone out.
+- Names available in `domain_force`: `user`, `time`, `company_ids` (enabled companies), `company_id`. `allowed_company_ids` is NOT in the eval context.
+- Reading a field through `browse(id)` in a non-sudo env checks ACLs and record rules (AccessError); the IDOR risk is `sudo()`.
 
 ### Multi-Company Rule
 
@@ -191,6 +200,8 @@ class SecureModel(models.Model):
     )
 ```
 
+Sensitive fields (password/token/cost) without `groups` are readable via `search_read`: use `groups="base.group_system"` or `groups=fields.NO_ACCESS` (`'.'`, exists in 16.0). Restricted fields are dropped from `fields_get`; an explicit read raises `AccessError`.
+
 ## Complete Security Template (v16)
 
 ### security/custom_module_security.xml
@@ -242,7 +253,7 @@ class SecureModel(models.Model):
 </odoo>
 ```
 
-## Official Odoo Guidelines (verified for 16.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 16.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 16.0 source; master-only APIs are translated to the 16.0 equivalent or marked as not available.
 
@@ -262,23 +273,13 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 | server QWeb output | `t-raw` anywhere; `Markup(...)` wrapping user content; f-string HTML | `t-out` escapes; `t-esc` is a deprecated alias of `t-out` (still escapes); `t-raw` still works in 16.0 but renders `Markup(content)` UNESCAPED (XSS sink, replace by `t-out`). Build HTML with `Markup("<p>%s</p>") % value`. `_()` does NOT escape Markup args in 16.0: use `Markup(_("Hello %s")) % value` |
 | JS output | `innerHTML`, `insertAdjacentHTML`, `markup()` on non-literal data | Owl 2: `import { markup, htmlEscape } from "@odoo/owl"`; `import { escape } from "@web/core/utils/strings"`. `@web/core/utils/html` (`setInnerHtml`, `htmlJoin`) does not exist in 16.0 |
 | `fields.Html` | user HTML stored with `sanitize=False` or `sanitize_overridable=True` without reason | options: `sanitize`, `sanitize_overridable`, `sanitize_tags`, `sanitize_attributes`, `sanitize_style`, `sanitize_form`, `strip_style`, `strip_classes` |
-| sensitive field without `groups` | password/token/cost readable via `search_read` | `groups="base.group_system"` or `groups=fields.NO_ACCESS` (`'.'`, exists in 16.0); restricted fields are dropped from `fields_get`, explicit read raises `AccessError` |
+| sensitive field without `groups` | password/token/cost readable via `search_read` | see Field-Level Security |
 | builtin `open()` | path influenced by input | `odoo.tools.file_open(path, mode='r', filter_ext=None, env=None)`: only addons paths, Odoo root and temp dirs from `file_open_temporary_directory(env)`; existing files only |
 | `eval` / `exec` | any use on data | `json.loads` / `ast.literal_eval`; at most `odoo.tools.safe_eval.safe_eval` (rejects names containing `__` and `_UNSAFE_ATTRIBUTES`) with a minimal context |
 | `getattr`/`setattr` on records | dynamic field name | `record[fname]` |
 | `pickle` | any unpickling of untrusted data | 16.0 still ships a restricted `odoo.tools.misc.pickle` (only set/datetime/pytz globals); prefer `json` |
 | secret comparison with `==` | token/hash compared directly | `odoo.tools.misc.consteq(a, b)` (= `hmac.compare_digest`), better: look the token up in the DB |
 | mutable default args | `def f(self, vals={})` | `vals=None` |
-
-### Access model in 16.0
-
-- Model access is `ir.model.access` (`security/ir.model.access.csv`); row-level is `ir.rule`. There is no `ir.access` / `ir.access.csv` in 16.0.
-- A model without any access row is inaccessible to non-superusers; module loading logs "The models [...] have no access rules".
-- An access row with empty `group_id` applies to everyone (there is no `base.group_everyone` group). Flag create/write/unlink granted to `base.group_portal`, `base.group_public` or to an empty group.
-- Access rights and rules are per operation (`perm_read/write/create/unlink`); a rule with only `perm_write` does not restrict reading.
-- Rule combination: all global rules (no groups) are AND-ed; all group rules matching any of the user's groups are OR-ed together, then AND-ed with the globals. Non-overlapping global rules lock everyone out.
-- Names available in `domain_force`: `user`, `time`, `company_ids` (enabled companies), `company_id`. Multi-company: `['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]`. `allowed_company_ids` is NOT in the eval context.
-- Reading a field through `browse(id)` in a non-sudo env checks ACLs and record rules (AccessError); the IDOR risk is `sudo()`.
 
 ## v16 Security Checklist
 

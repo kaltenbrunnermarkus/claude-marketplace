@@ -14,9 +14,9 @@
 |-----------|-----|-----|-------------------|
 | Record rule eval context | `user`, `time`, `company_ids`, `company_id` | `user`, `company_ids`, `company_id` | Remove `time` from rule domains |
 | User groups field | `groups_id` | `group_ids` | Rename |
-| Domain combination | `odoo.osv.expression` | `odoo.fields.Domain` (expression deprecated) | Recommended |
-| RPC guard | classmethods callable | classmethods/staticmethods blocked | None |
-| Route types | `http`, `json` | `http`, `jsonrpc`, `json2` | Optional |
+| Domain combination (no list concatenation onto security domains) | `odoo.osv.expression`: `expression.AND([...])` | `odoo.fields.Domain`: `Domain(a) & Domain(b)` (expression deprecated) | Recommended |
+| RPC guard `get_public_method` | blocks `_` names, `@api.private`, unsafe attribute names; classmethods callable | + blocks classmethods/staticmethods | None |
+| Route types | `http`, `json` | `http`, `jsonrpc`, `json2`; `json` = deprecated alias | Optional |
 | Type hints | Optional | Optional | None |
 | SQL builder | Recommended | Recommended | None |
 | Python | 3.10+ | 3.10+ | None |
@@ -310,21 +310,14 @@ export class MyComponent extends Component {
 }
 ```
 
-## Official guideline deltas 18.0 -> 19.0
+## Additional deltas from Odoo's official guidelines (18.0 -> 19.0)
 
-Only the security rows of the verified official-guideline matrix that change between 18.0 and 19.0:
+Verified official-guideline security items that change between 18.0 and 19.0 and are not in the overview above:
 
 | Topic | 18.0 | 19.0 |
 |-------|------|------|
-| Domain combination (no list concatenation onto security domains) | `expression.AND([...])` | `Domain(a) & Domain(b)` (`from odoo.fields import Domain`) |
-| RPC guard `get_public_method` | blocks `_` names, `@api.private`, unsafe attribute names | + blocks classmethods/staticmethods |
-| Route `type` | `http`, `json` | `http`, `jsonrpc`, `json2`; `json` = deprecated alias |
 | JS escaping helpers (`@web/core/utils/html`) | `htmlEscape`, `setElementContent`, `isHtmlEmpty` | + `htmlJoin`, `htmlSprintf`, `htmlReplace`, ...; still no `setInnerHtml` |
-| ir.rule eval context | `user`, `time`, `company_ids`, `company_id` | `user`, `company_ids`, `company_id` |
 | Field access check helper | `check_field_access_rights()` | deprecated (internal `_check_field_access`) |
-| Users/groups field | `groups_id` | `group_ids` |
-
-Unchanged in both: `sudo(flag)` / `with_user()`; `_allow_sudo_commands`; `related_sudo=True` default; `odoo.tools.SQL` + `SQL.identifier`; `auth` values `user`/`bearer`/`public`/`none` with no `bearer_scope`; CSRF on for http routes, no token check for JSON routes; `t-out` (with `t-esc` escaping and `t-raw` unescaped, both deprecated); `fields.NO_ACCESS`; `file_open` confinement; `safe_eval` dunder blocking; no restricted pickle; `odoo.tools.consteq`; `ir.model.access` + `ir.rule` (no `ir.access`, no `base.group_everyone`); global rules AND-ed, group rules OR-ed; `check_access()` / `has_access()` (old `check_access_rights`/`check_access_rule` deprecated since 18).
 
 ## Migration Checklist
 
@@ -340,10 +333,16 @@ Unchanged in both: `sudo(flag)` / `with_user()`; `_allow_sudo_commands`; `relate
 ### Security Groups, Access Rights, Record Rules
 
 These remain unchanged from v18 to v19:
-- ir.model.access.csv format
-- Record rule combination semantics (except the removed `time` name)
-- Field groups attribute
+- ir.model.access.csv format; `ir.model.access` + `ir.rule` (no `ir.access`, no `base.group_everyone`)
+- Record rule combination semantics: global rules AND-ed, group rules OR-ed (except the removed `time` name)
+- `check_access()` / `has_access()` (old `check_access_rights`/`check_access_rule` deprecated since 18)
+- Field groups attribute, `fields.NO_ACCESS`
 - View visibility syntax
+- `sudo(flag)` / `with_user()`; `_allow_sudo_commands`; `related_sudo=True` default
+- `odoo.tools.SQL` + `SQL.identifier`
+- Routes: `auth` values `user`/`bearer`/`public`/`none` with no `bearer_scope`; CSRF on for http routes, no token check for JSON routes
+- Server QWeb: `t-out` (with `t-esc` escaping and `t-raw` unescaped, both deprecated)
+- `file_open` confinement; `safe_eval` dunder blocking; no restricted pickle; `odoo.tools.consteq`
 
 ## GitHub Reference
 

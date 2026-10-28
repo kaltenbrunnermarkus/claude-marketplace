@@ -15,7 +15,7 @@
 | OWL | OWL 2.x replaces 1.x | High - Rewrite components |
 | Views | `attrs=` still the correct syntax (direct `invisible="expr"` only from 17.0) | None |
 | Assets | `assets` manifest key unchanged (already in 15.0); `web.assets_qweb` XML moves into `web.assets_backend` | Low - move XML entries |
-| Batch | `@api.model` single-dict `create` now logs a warning | Medium - Update create() |
+| Batch | `@api.model` single-dict `create`: silently wrapped in 15.0, works but logs a warning in 16.0 | Medium - Update create() |
 
 ## ORM Command Class
 
@@ -125,6 +125,7 @@ class MyComponent extends Component {
 | Direct property `state = useState()` | `setup() { this.state = useState() }` |
 | `t-on-click` | `t-on-click` (same) |
 | `owl.hooks.useState` | `import { useState }` |
+| JS escaping: no `markup()`, no `escape` util (use `t-esc`, `_.escape`) | `markup()`, `escape` in `@web/core/utils/strings` |
 
 ## View Modifiers: keep `attrs` in 16.0
 
@@ -244,7 +245,7 @@ https://raw.githubusercontent.com/odoo/odoo/16.0/odoo/tools/view_validation.py
 
 ## Official guideline deltas 15.0 -> 16.0
 
-Only rows of the verified 14-19 matrix that change between 15.0 and 16.0:
+Only rows of the verified 14-19 matrix that change between 15.0 and 16.0 and are not covered above (`create` warning, assets XML and JS escaping are in the tables above):
 
 | Topic | 15.0 | 16.0 |
 |---|---|---|
@@ -253,13 +254,10 @@ Only rows of the verified 14-19 matrix that change between 15.0 and 16.0:
 | `@api.private` | absent | available |
 | `odoo.tools.SQL` | absent | name exists but is psycopg2 `sql.SQL` (not the 17.0+ builder) |
 | route override without `@http.route` | URL silently dropped | auto-decorated + warning |
-| JS escaping | Owl 1.4: no `markup()`, no `escape` util | Owl 2: `markup()`, `escape` in `@web/core/utils/strings` |
 | `index=` values | bool only | `True`/`'btree'`/`'btree_not_null'`/`'trigram'` |
-| `@api.model` single-dict `create` | silently wrapped | works, logs a warning |
 | `t-lang` without `t-call` | silently ignored | SyntaxError |
 | `BaseCommon` / `BaseUsersCommon` test fixtures | absent | available (still SUPERUSER env) |
 | `patch` | `patch(obj, name, ext)` + `this._super` | same signature |
-| XML templates in assets | `web.assets_qweb` | inside the JS bundles (`web.assets_backend`, ...) |
 
 Unchanged in 15.0 and 16.0: `Command`, `_allow_sudo_commands`, `related_sudo`, `osv.expression` domains,
 `read_group` (dict API), `_sql_constraints`, no `grouped()`, `_()`/`_lt` (no `env._`), no `base` injection in

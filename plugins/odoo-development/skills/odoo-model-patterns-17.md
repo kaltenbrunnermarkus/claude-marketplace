@@ -44,8 +44,12 @@ def create(self, vals):
 # v17 correct form:
 @api.model_create_multi
 def create(self, vals_list):
+    for vals in vals_list:
+        ...
     return super().create(vals_list)
 ```
+
+A single-dict `@api.model` create is wrapped by the ORM and logs a warning in 17.0. Do not use it.
 
 ## Model Definition
 
@@ -470,7 +474,7 @@ def action_view_lines(self):
     }
 ```
 
-## Official Odoo Guidelines (verified for 17.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 17.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 17.0 source; master-only APIs are translated to the 17.0 equivalent or marked as not available.
 
@@ -500,18 +504,6 @@ Group keys of many2one groupbys are records. The public `read_group(domain, fiel
 ### Recordset helpers
 
 `filtered`, `mapped`, `sorted` and `grouped` exist in 17.0. `records.grouped('state')` (or a callable) returns `{key: recordset}` with a shared prefetch set and no SQL. Use `if records:`, not `if len(records):`. Use `ensure_one()` before reading fields on what must be a single record; `action_*` methods called from buttons should start with it.
-
-### create override
-
-```python
-@api.model_create_multi
-def create(self, vals_list):
-    for vals in vals_list:
-        ...
-    return super().create(vals_list)
-```
-
-A single-dict `@api.model` create is wrapped by the ORM and logs a warning in 17.0. Do not use it.
 
 ### Constraints and indexes (17.0 form)
 

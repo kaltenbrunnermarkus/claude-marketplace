@@ -14,7 +14,7 @@
 - **Type Hints**: Optional (not enforced in v18 or v19)
 - **SQL Builder**: Use `SQL()` for raw SQL (plain `cr.execute(str, params)` still works)
 - **Company Check**: Use `_check_company_auto = True`
-- **Decorators**: `@api.model_create_multi` for `create` (`@api.model` on create still works but emits a DeprecationWarning)
+- **Decorators**: `@api.model_create_multi` + `def create(self, vals_list)` (`@api.model` on create still works but emits a DeprecationWarning); callers may still pass a single dict
 
 ## Model Definition (v18)
 
@@ -127,6 +127,8 @@ class MyModel(models.Model):
             record.display_name = f"[{record.sequence}] {record.name or ''}"
 
     # === CONSTRAINTS === #
+    # Invariants belong in @api.constrains or _sql_constraints; @api.onchange is UI-only.
+    # 18.0: models.Constraint does not exist, use _sql_constraints.
     @api.constrains('amount')
     def _check_amount(self) -> None:
         """Validate amount is positive."""
@@ -332,6 +334,8 @@ class ResPartner(models.Model):
 
 ### Delegation Inheritance
 
+`_inherits` delegates fields (as related fields), not methods.
+
 ```python
 class ExtendedModel(models.Model):
     _name = 'my_module.extended_model'
@@ -496,7 +500,7 @@ class MyModel(models.Model):
 | `@api.depends_context(*keys)` | Context-dependent compute |
 | `@api.autovacuum` | Scheduled cleanup |
 
-## Official Odoo Guidelines (verified for 18.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 18.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 18.0 source; master-only APIs are translated to their 18.0 equivalent or marked as not available.
 
@@ -526,16 +530,12 @@ counts = dict(self.env['my_module.my_model']._read_group(
 
 | Rule | 18.0 form |
 |------|-----------|
-| `create` override | `@api.model_create_multi` + `def create(self, vals_list)`; a single dict is still accepted by callers |
-| SQL constraints | `_sql_constraints = [('name_uniq', 'unique(company_id, name)', 'Message')]` (`models.Constraint` does not exist in 18) |
 | Indexes | field `index=True` (`'btree'`), `'btree_not_null'` (mostly-NULL columns), `'trigram'` (ilike search); only on searched AND selective fields. Multi-column: override `init()` and call `odoo.tools.sql.create_index(self.env.cr, name, self._table, ['col_a', 'col_b'])` |
-| Invariants | `@api.constrains` or `_sql_constraints`; `@api.onchange` is UI-only |
 | Translation | `self.env._("Order %s confirmed", order.name)` or `_("...", arg)`; pass arguments to `_()`, never format before/after the lookup; module level: `_lt = LazyTranslate(__name__)` then `LABEL = _lt("Label")`; lists are not formatted per language in 18 -> `odoo.tools.format_list(self.env, names)` |
 | Domains | `from odoo.osv import expression`; `expression.AND([d1, d2])`, `expression.OR([...])`; never hand-build prefix lists |
 | Grouping in memory | `records.grouped('partner_id')` -> `{partner: recordset}` (same prefetch set) |
 | Context | `with_context(key=...)` (frozendict); prefix custom keys with the module name; a stray `default_<field>` key in the context is applied by every `create` on any model that has that field |
 | Related through x2many | `related='line_ids.product_id'` follows only the FIRST line; use a compute for "all lines" |
-| `_inherits` | delegates fields (as related fields), not methods |
 | Savepoints | `with self.env.cr.savepoint():` around code whose failure must not break the transaction; catch specific exceptions |
 | Commit | never `self.env.cr.commit()`/`rollback()` unless you opened the cursor yourself; tests forbid it |
 | Reserved fields | `active` (archive with `action_archive()`/`action_unarchive()`), `state`, `parent_id` + `parent_path` (indexed) with `_parent_store = True`, `company_id` with `_check_company_auto` + `check_company=True`; keep `_log_access` on TransientModel |

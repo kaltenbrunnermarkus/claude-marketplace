@@ -437,6 +437,36 @@
 | `replace` | Replace entire element |
 | `attributes` | Modify attributes only |
 
+### Anchor on Names, Never on Position
+
+Anchor on a stable, identifying attribute (an element's `name`), never on document position: the parent view belongs to another module that changes it freely, and a positional match silently lands on the wrong element or breaks at install.
+
+```xml
+<!-- good: shorthand form, matches the field by name -->
+<field name="partner_id" position="after">
+    <field name="delivery_instructions"/>
+</field>
+
+<!-- good: xpath when the shorthand cannot express the match -->
+<xpath expr="//page[@name='other_information']//field[@name='user_id']" position="attributes">
+    <attribute name="readonly">1</attribute>
+</xpath>
+
+<!-- bad: breaks as soon as the parent view inserts or reorders anything -->
+<xpath expr="//group[2]/field[3]" position="after">
+    <field name="delivery_instructions"/>
+</xpath>
+```
+
+Shorthand matching semantics (same in 14.0-19.0):
+- A `<field name="x">` locator matches the **first** field named `x` in document order at **any depth** - including fields inside an embedded one2many subview. Other attributes on the locator are ignored. Use an xpath when the name recurs (e.g. `//field[@name='line_ids']/list/field[@name='name']`; `tree` in 14.0-17.0).
+- Any **other** tag (`<group name="...">`, `<page name="...">`, `<div class="...">`) matches the first node with the same tag carrying **all** the locator's attributes with equal values (`position` excepted); extra attributes on the target are fine.
+
+Record conventions for inherited views:
+- An inheriting view's `name` carries an `.inherit.<details>` suffix.
+- A new primary variant (not an extension) sets `<field name="mode">primary</field>` (or `<template primary="True">`) and needs no inherit suffix.
+- Do not re-add fields the parent view already renders.
+
 ### CRITICAL: Always Verify XPath Expressions
 
 **ALWAYS read the parent view structure before writing inheritance code.** XPath expressions must match the ACTUAL view structure, not assumptions.
@@ -487,43 +517,13 @@
 
 ---
 
-## Official Odoo Guidelines for XML (verified for 14.0-19.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 14.0-19.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/odoo-guidelines`, branch 20.0) and were checked against the 14.0-19.0 sources (`odoo/tools/template_inheritance.py`, `odoo/tools/convert.py`).
 
-### Anchor view inheritance on names, never on position
-
-Anchor on a stable, identifying attribute (an element's `name`), never on document position: the parent view belongs to another module that changes it freely, and a positional match silently lands on the wrong element or breaks at install.
-
-```xml
-<!-- good: shorthand form, matches the field by name -->
-<field name="partner_id" position="after">
-    <field name="delivery_instructions"/>
-</field>
-
-<!-- good: xpath when the shorthand cannot express the match -->
-<xpath expr="//page[@name='other_information']//field[@name='user_id']" position="attributes">
-    <attribute name="readonly">1</attribute>
-</xpath>
-
-<!-- bad: breaks as soon as the parent view inserts or reorders anything -->
-<xpath expr="//group[2]/field[3]" position="after">
-    <field name="delivery_instructions"/>
-</xpath>
-```
-
-Shorthand matching semantics (same in 14.0-19.0):
-- A `<field name="x">` locator matches the **first** field named `x` in document order at **any depth** - including fields inside an embedded one2many subview. Other attributes on the locator are ignored. Use an xpath when the name recurs (e.g. `//field[@name='line_ids']/list/field[@name='name']`; `tree` in 14.0-17.0).
-- Any **other** tag (`<group name="...">`, `<page name="...">`, `<div class="...">`) matches the first node with the same tag carrying **all** the locator's attributes with equal values (`position` excepted); extra attributes on the target are fine.
-
-Record conventions for inherited views:
-- An inheriting view's `name` carries an `.inherit.<details>` suffix.
-- A new primary variant (not an extension) sets `<field name="mode">primary</field>` (or `<template primary="True">`) and needs no inherit suffix.
-- Do not re-add fields the parent view already renders.
-
 ### Shortcut tags and the `active` trap
 
-Prefer `<menuitem>` and `<template>` (and `<asset>` from 17.0) over raw `<record>`. Trap: an `active` attribute on `<template>` / `<asset>` is applied only when the record is **created** (install, or update when the record does not exist yet). A module **update** (`-u`) refreshes the arch but never changes `active`, so it cannot deactivate an already-installed template.
+Prefer `<menuitem>` and `<template>` (all versions; `<asset>` from 17.0) over raw `<record>`. Trap: an `active` attribute on `<template>` / `<asset>` is applied only when the record is **created** (install, or update when the record does not exist yet). A module **update** (`-u`) refreshes the arch but never changes `active`, so it cannot deactivate an already-installed template.
 
 ### `noupdate`
 
@@ -650,10 +650,4 @@ Prefix custom CSS classes in views and templates with `o_<module>` (e.g. `o_my_m
 |---------|---------|------|
 | List view root / type | `<tree>`, `view_mode="tree,form"` | `<list>`, `view_mode="list,form"` (`tree` no longer accepted) |
 
-The `<tree>` examples in this file are 14.0-17.0 syntax; write `<list>` for 18.0+. In 19.0 the form chatter is `<chatter/>` instead of `<div class="oe_chatter">...</div>`.
-
-| Feature | v14 | v15 | v16+ |
-|---------|-----|-----|------|
-| `<template>`, `<menuitem>` shortcut tags | yes | yes | yes |
-| `<asset>` shortcut tag | - | - | 17.0+ |
-| `t-lang` without `t-call` (reports) | silently ignored | silently ignored | SyntaxError |
+The `<tree>` examples in this file are 14.0-17.0 syntax; write `<list>` for 18.0+. In 19.0 the form chatter is `<chatter/>` instead of `<div class="oe_chatter">...</div>`. Shortcut tags and `t-lang`: see "Additional Rules from Odoo's Official Guidelines".

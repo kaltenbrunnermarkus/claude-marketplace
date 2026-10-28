@@ -45,7 +45,15 @@ access_custom_model_user,custom.model.user,model_custom_model,custom_module.grou
 access_custom_model_manager,custom.model.manager,model_custom_model,custom_module.group_custom_manager,1,1,1,1
 ```
 
+- A model without any row is inaccessible, TransientModels included.
+- Never grant create/write/unlink to `base.group_portal` or `base.group_public`, or with an empty `group_id` (= every user; `base.group_everyone` does not exist in 14.0).
+
 ## Record Rules (v14 Syntax)
+
+- Rules only cover the modes they set (`perm_read/write/create/unlink`): the other operations are governed by ACLs only.
+- Global rules (no `groups`) are AND-ed: non-overlapping globals lock everyone out. All rules of the user's groups are OR-ed together, then AND-ed with the globals.
+- Multi-company models need a company rule (first example below).
+- The `domain_force` eval context holds `user`, `time`, `company_ids`, `company_id` (no `allowed_company_ids`).
 
 ```xml
 <record id="rule_custom_model_company" model="ir.rule">
@@ -233,7 +241,9 @@ class SecureModel(models.Model):
     )
 ```
 
-## Official Odoo Guidelines (verified for 14.0)
+Field `groups` hides the field from `fields_get` and raises AccessError on explicit read/write. Password or token fields on a model readable through `search_read` must have `groups=`: use `groups='base.group_system'` or `groups=fields.NO_ACCESS` (`'.'`, exists in 14.0).
+
+## Additional Rules from Odoo's Official Guidelines (verified for 14.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 14.0 source; master-only APIs are translated to the 14.0 equivalent or marked as not available.
 
@@ -252,24 +262,15 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 | server QWeb | `t-raw` on anything that is not sanitized HTML. 14.0 has no `t-out`: `t-esc` is the escaping directive, `t-raw` prints raw. HTML built in Python with `%`/f-strings from user data and then rendered with `t-raw`: escape the parts with `odoo.tools.html_escape()`. `_()` does not escape arguments in 14.0. |
 | JS | `$el.html(userValue)`, `innerHTML`, `insertAdjacentHTML` with non-literal content. Owl is 1.4.11 (no `markup`, no `htmlEscape`, no `@web/core/utils/html`): render through QWeb `t-esc` or set `.text()`/`textContent`. |
 | `fields.Html` | `sanitize=False` on user-editable content. Available options: `sanitize`, `sanitize_tags`, `sanitize_attributes`, `sanitize_style`, `sanitize_form`, `strip_style`, `strip_classes`. |
-| secrets and tokens | a password or token field without `groups=` on a model readable through `search_read`. Use `groups='base.group_system'` or `groups=fields.NO_ACCESS` (`'.'`, exists in 14.0). Field `groups` hides the field from `fields_get` and raises AccessError on explicit read/write. |
+| secrets and tokens | a password or token field without `groups=` on a model readable through `search_read`; see Field-Level Security (v14). |
 | `open()` | a path influenced by input. Use `odoo.tools.file_open(name, mode='r', subdir='addons', pathinfo=False, filter_ext=None, env=None)`: it only resolves inside addons paths, `root_path` and temp dirs registered on `env`, and never creates files. |
 | `eval` / `exec` | any use. Use `json.loads` / `ast.literal_eval`; `odoo.tools.safe_eval.safe_eval` only with a constrained namespace for trusted users. safe_eval rejects names containing `__`. Public methods returning rich objects are reachable from server actions. |
 | `getattr` / `setattr` | a dynamic field name from input. Use `record[name]` after checking `name in record._fields`. |
 | `pickle` | stdlib `pickle.loads` on untrusted data. 14.0 still ships the restricted `odoo.tools.misc.pickle` (no globals), but prefer JSON. |
 | secret comparison | `==` on tokens. Use `odoo.tools.consteq(a, b)`, or better look the token up in the database. |
 | mutable defaults | `def m(self, vals={})` / `=[]`. |
-| `ir.model.access.csv` | a row grants create/write/unlink to `base.group_portal` or `base.group_public`, or to an empty `group_id` (= every user; `base.group_everyone` does not exist in 14.0). A model without any row is inaccessible, TransientModels included. |
-| `ir.rule` | rules only cover some modes (`perm_read/write/create/unlink`): the other operations are governed by ACLs only. Global rules (no `groups`) are AND-ed: non-overlapping globals lock everyone out. All rules of the user's groups are OR-ed together, then AND-ed with the globals. Multi-company models need a company rule. The eval context holds `user`, `time`, `company_ids`, `company_id` (no `allowed_company_ids`). |
-
-Multi-company rule (14.0):
-```xml
-<record id="my_model_rule_company" model="ir.rule">
-    <field name="name">My Model: multi-company</field>
-    <field name="model_id" ref="model_my_model"/>
-    <field name="domain_force">['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]</field>
-</record>
-```
+| `ir.model.access.csv` | a row grants create/write/unlink to portal/public or with an empty `group_id`, or a model has no row; see Access Rights (v14). |
+| `ir.rule` | rules miss modes, globals do not overlap, or a multi-company model has no company rule; see Record Rules (v14 Syntax). |
 
 ## v14 Security Checklist
 

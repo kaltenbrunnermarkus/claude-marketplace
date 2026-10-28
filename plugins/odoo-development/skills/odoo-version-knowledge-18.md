@@ -44,6 +44,8 @@ query = SQL(
 )
 ```
 
+`_search()` returns a `Query`; select from it with `query.select(SQL(...))`. Same API in master.
+
 ### Type Hints (Optional)
 ```python
 def calculate_total(self, include_tax: bool = True) -> float:
@@ -82,11 +84,11 @@ if not record.exists():
 | Feature | Status | Replacement | Deadline |
 |---------|--------|-------------|----------|
 | Raw SQL strings | Discouraged (still work) | `SQL()` builder | - |
-| `check_access_rights()` / `check_access_rule()` / `_filter_access_rules()` | Deprecated (DeprecationWarning) | `check_access()`, `has_access()`, `_filtered_access()` | - |
-| `@api.model` on `create` | Deprecated (DeprecationWarning) | `@api.model_create_multi` | - |
+| `check_access_rights()` / `check_access_rule()` / `_filter_access_rules()` | Deprecated (DeprecationWarning) | `check_access()`, `has_access()`, `_filtered_access()` (same in master) | - |
+| `@api.model` on `create` | Deprecated (DeprecationWarning) | `@api.model_create_multi` (master converts a single dict silently) | - |
 | `group_operator=` field attribute | Deprecated | `aggregator=` | - |
 | `_check_recursion()` | Deprecated | `not self._has_cycle()` | - |
-| `t-esc` / `t-raw` (server QWeb) | Deprecated (still render; `t-raw` unescaped) | `t-out` | - |
+| `t-esc` / `t-raw` (server QWeb) | Deprecated (still render: `t-esc` is an escaping alias of `t-out`, `t-raw` renders unescaped; same in master) | `t-out` | - |
 
 ## v18 Required Patterns
 
@@ -157,6 +159,8 @@ amount = fields.Monetary(currency_field='currency_id')
 
 ## v18 Security Patterns
 
+Access model: `ir.model.access` + `ir.rule` (master unifies them into `ir.access`, not available in 18).
+
 ### Access Rights (ir.model.access.csv)
 ```csv
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
@@ -179,6 +183,8 @@ access_my_model_manager,my.model.manager,model_my_model,group_manager,1,1,1,1
 ```
 
 ## v18 OWL Patterns
+
+Owl 2.x (master: Owl 3): no `computed`; patching uses `patch(obj, extension)`.
 
 ### Component Structure
 ```javascript
@@ -233,7 +239,7 @@ def action_view_records(self) -> dict:
     }
 ```
 
-## Official Odoo Guidelines (verified for 18.0)
+## Additional Rules from Odoo's Official Guidelines (verified for 18.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 18.0 source; master-only APIs are translated to their 18.0 equivalent or marked as not available.
 
@@ -244,23 +250,17 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 | Combine domains | `odoo.osv.expression.AND/OR/normalize_domain` | `odoo.fields.Domain` (`&`, `|`, `~`) |
 | SQL constraints | `_sql_constraints = [(name, sql, message)]` | `models.Constraint(...)`; `_sql_constraints` ignored |
 | Multi-column / custom index | `init()` + `odoo.tools.sql.create_index()`; field `index=True/'btree_not_null'/'trigram'` | `models.Index` / `models.UniqueIndex` |
-| SQL builder | `odoo.tools.SQL`, `SQL.identifier()`, `_search()` returns `Query`, `query.select(SQL(...))` | same |
 | Aggregation | `_read_group(domain, groupby, aggregates)` -> list of tuples; `read_group()` (dicts) still public | `read_group` deprecated -> `formatted_read_group` |
 | Recordset helpers | `filtered`, `mapped`, `sorted`, `grouped`, `filtered_domain` | same |
-| `create` override | `@api.model_create_multi`; `@api.model` create -> DeprecationWarning | single dict converted silently |
 | RPC guard | blocks `_` names, `@api.private`, unsafe attribute names; classmethods NOT blocked | also blocks classmethods/staticmethods |
 | `@api.private` | yes | yes |
 | Route `type` | `http`, `json` | `http`, `jsonrpc`, `json2` |
 | Route `auth` | `user`, `bearer` (no `bearer_scope`), `public`, `none` | + `bearer_scope` |
 | Translation | `self.env._("text %s", arg)`, frame-based `_()`, `_lt = LazyTranslate(__name__)` or `from odoo import _lt`; list args NOT formatted per language (use `odoo.tools.format_list`) | list args formatted per language |
-| Server QWeb | `t-out`; `t-esc` = escaping alias (deprecated); `t-raw` still renders unescaped (deprecated) | same |
 | `t-lang` without `t-call` | SyntaxError | SyntaxError |
-| Access model | `ir.model.access` + `ir.rule`; rule eval context `user, time, company_ids, company_id` | `ir.access` (unified) |
-| Access checks | `check_access()`, `has_access()`, `_filtered_access()` (old methods deprecated) | same |
 | Restricted pickle | removed | removed |
 | Manifest | no automatic `base` dependency (declare it); `license` defaults to LGPL-3 with warning; `auto_install` may be a list; `assets` key | `base` injected |
 | Tests | default tags `standard` + `at_install`; post-install = `@tagged('post_install', '-at_install')`; `BaseCommon` runs as superuser (no independent user/company) | default `post_install`; independent user/company |
-| Owl | 2.x, no `computed`; `patch(obj, extension)` | Owl 3 |
 | Web HTML helpers | `htmlEscape`, `setElementContent`, `isHtmlEmpty` (`@web/core/utils/html`); Owl `markup` as escaping tagged template | + `htmlJoin`, `setInnerHtml`, ... |
 
 ### Master-only things NOT to use in 18.0

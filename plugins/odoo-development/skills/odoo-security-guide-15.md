@@ -45,6 +45,10 @@ access_custom_model_user,custom.model.user,model_custom_model,custom_module.grou
 access_custom_model_manager,custom.model.manager,model_custom_model,custom_module.group_custom_manager,1,1,1,1
 ```
 
+- Access model: `ir.model.access` (CSV, per operation `perm_read/write/create/unlink`) + `ir.rule`. There is no `ir.access` model in 15.0.
+- Default deny: a model without a matching ACL row is inaccessible; module loading logs "The models [...] have no access rules" (also for TransientModels).
+- `base.group_everyone` does not exist. An ACL row with an empty `group_id` applies to everybody, including portal and public users: flag write/create/unlink on such rows and on `base.group_portal` / `base.group_public`.
+
 ## Record Rules (v15 Syntax)
 
 ```xml
@@ -66,6 +70,10 @@ access_custom_model_manager,custom.model.manager,model_custom_model,custom_modul
     <field name="groups" eval="[(4, ref('group_custom_user'))]"/>
 </record>
 ```
+
+- Rule combination: global rules (no `groups`) are AND-ed; all applicable group rules of the user are OR-ed together and then AND-ed with the globals. Non-overlapping global rules lock everybody out.
+- A rule restricted to some `perm_*` operations leaves the other operations unrestricted: cover all CRUD operations.
+- Rule eval context: `user`, `time`, `company_ids`, `company_id` (NOT `allowed_company_ids`); multi-company domain as in the first example.
 
 ## Model Security (v15 Patterns)
 
@@ -221,7 +229,9 @@ class SecureModel(models.Model):
     )
 ```
 
-## Official Odoo Guidelines (verified for 15.0)
+Password/token/API key fields on a model readable by normal users are readable via `search_read` unless they carry `groups`: use `groups='base.group_system'` or `groups=fields.NO_ACCESS` (`'.'`, only sudo can read). `groups` hides the field from `fields_get` and raises on explicit read/write.
+
+## Additional Rules from Odoo's Official Guidelines (verified for 15.0)
 
 These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 15.0 source; master-only APIs are translated to the 15.0 equivalent or marked as not available.
 
@@ -243,7 +253,7 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 | `Markup(` | user content is formatted into the Markup string via f-string/`+` | `Markup("<p>%s</p>") % value` or `Markup("<p>{}</p>").format(value)` escape the arguments. `_()` in 15.0 does plain `%` formatting and does NOT escape Markup arguments: escape before translating into HTML |
 | JS `innerHTML`, `$el.html(`, `insertAdjacentHTML`, Owl 1 `t-raw` | the value is not a trusted constant | Owl 1.4 has no `markup()`; `@web/core/utils/html` does not exist in 15.0. Use `t-esc` in templates or escape with underscore's `_.escape` |
 | `fields.Html(` | `sanitize=False` on user-editable content | Keep `sanitize=True`; tune `sanitize_tags`, `sanitize_attributes`, `sanitize_style`, `sanitize_form`, `strip_style`, `strip_classes` |
-| password/token/API key fields | no `groups` on a model readable by normal users (readable via `search_read`) | `groups='base.group_system'` or `groups=fields.NO_ACCESS` (`'.'`, only sudo can read). `groups` hides the field from `fields_get` and raises on explicit read/write |
+| password/token/API key fields | no `groups` on a model readable by normal users | see Field-Level Security (v15) |
 | builtin `open(` | the path is influenced by input | `odoo.tools.file_open(path, mode, filter_ext=..., env=...)`: confined to addons paths, the server root and temp dirs from `file_open_temporary_directory(env)`; only existing files |
 | `eval(` / `exec(` | any use on data | `json.loads` / `ast.literal_eval`; `odoo.tools.safe_eval.safe_eval` only for trusted (admin) input. Names containing `__` are rejected by safe_eval |
 | `getattr(record, name)` / `setattr` | `name` comes from input | `record[name]` after checking `name in record._fields` |
@@ -251,14 +261,7 @@ These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branc
 | `==` on secrets/tokens | timing-unsafe comparison | `odoo.tools.consteq(a, b)`; better: look the token up in the database |
 | `def f(x=[])` / `={}` | mutable default argument | `None` default |
 
-### Access model (15.0)
-
-- `ir.model.access` (CSV, per operation `perm_read/write/create/unlink`) + `ir.rule`. There is no `ir.access` model in 15.0.
-- Default deny: a model without a matching ACL row is inaccessible; module loading logs "The models [...] have no access rules" (also for TransientModels).
-- `base.group_everyone` does not exist. An ACL row with an empty `group_id` applies to everybody, including portal and public users: flag write/create/unlink on such rows and on `base.group_portal` / `base.group_public`.
-- Rule combination: global rules (no `groups`) are AND-ed; all applicable group rules of the user are OR-ed together and then AND-ed with the globals. Non-overlapping global rules lock everybody out.
-- A rule restricted to some `perm_*` operations leaves the other operations unrestricted: cover all CRUD operations.
-- Rule eval context: `user`, `time`, `company_ids`, `company_id` (NOT `allowed_company_ids`). Multi-company: `['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]`.
+Access model (ACLs, record rules): see Access Rights (v15) and Record Rules (v15 Syntax).
 
 ## v15 Security Checklist
 
@@ -285,6 +288,6 @@ When generating Odoo 15.0 security code:
 1. **Use** `attrs` for view visibility: `attrs="{'invisible': [...]}"`
 2. **Use** `tracking=True` for field tracking (NOT `track_visibility`)
 3. **Do NOT** use `@api.multi` (does not exist in 15.0)
-3a. **Follow** the "Official Odoo Guidelines (verified for 15.0)" audit sweep above
+3a. **Follow** the "Additional Rules from Odoo's Official Guidelines (verified for 15.0)" audit sweep above
 4. **Use** updated chatter syntax (no widget attribute needed)
 5. **Note**: v15 is legacy - recommend upgrading

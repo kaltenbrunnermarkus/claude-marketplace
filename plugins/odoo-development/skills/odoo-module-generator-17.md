@@ -7,6 +7,7 @@
 ║  DO NOT use these patterns for other versions.                               ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 ```
+> Includes rules from Odoo's official skill library (odoo/odoo skills/, branch 20.0), verified against the 17.0 source.
 
 ## Version 17.0 Requirements
 
@@ -67,7 +68,7 @@
 │   └── {model_name}.py
 ├── views/
 │   ├── {model_name}_views.xml
-│   └── menuitems.xml
+│   └── {module_name}_menus.xml
 ├── security/
 │   ├── ir.model.access.csv
 │   └── {module_name}_security.xml
@@ -81,6 +82,18 @@
 │   └── test_{model_name}.py
 └── i18n/
 ```
+
+### Structure and naming (17.0)
+
+- One model class per file, file named after the model (`models/sale_order.py`). Views `views/<model>_views.xml`, `<model>_templates.xml`, `<module>_menus.xml`, data `data/<model>_data.xml`, demo `demo/<model>_demo.xml`. Security: `security/ir.model.access.csv` + `security/<module>_security.xml` (17.0 has no `ir.access.csv`).
+- Controllers: files named by feature (or `<inherited_module>.py`); `main.py` is legacy. Re-decorate overridden routes with `@http.route()` (17.0 auto-decorates and warns otherwise); the route `type` (`'http'`/`'json'`) cannot change in an override.
+- Reports: SQL-view models in `report/<model>_report.py`; printable reports split into `<model>_reports.xml` (actions) and `<model>_templates.xml` (QWeb).
+- XML ids: `<model>_view_form`, `<model>_view_tree`, `<model>_action`, `<model>_menu`, `<module>_group_<name>`, `<model>_rule_<group>`. In records put `id` before `model`; in fields put `name` first.
+- Model `_name`: dotted, module-prefixed, singular (`my_module.request`); wizards `<base_model>.<action>`; SQL reports `<base_model>.report.<action>`.
+- Method prefixes: `_compute_`, `_inverse_`, `_search_`, `_default_`, `_selection_`, `_onchange_`, `_check_` (constraints), `action_*` (starts with `self.ensure_one()` when it acts on one record). Business methods are private (`_`) unless they must be callable via RPC; `@api.private` exists in 17.0 for public names that must not be exposed.
+- Class body order (17.0): private attributes (`_name`, `_description`, `_inherit`, `_order`, `_sql_constraints`, ...) -> default methods -> fields -> compute/inverse/search methods -> selection methods -> constrains/onchange -> CRUD overrides -> action methods -> other business methods.
+- Imports: stdlib, third party, `odoo` (`from odoo import Command, _, api, fields, models`), then `odoo.addons`.
+- Translations: `_("Text %s", value)` (never `%` after `_()`); `_lt` for module-level strings; no `self.env._` in 17.0.
 
 ## __manifest__.py Template (v17)
 
@@ -103,7 +116,7 @@
         'security/{module_name}_security.xml',  # Groups first
         'security/ir.model.access.csv',          # Access rights
         'views/{model_name}_views.xml',          # Views
-        'views/menuitems.xml',                   # Menus last
+        'views/{module_name}_menus.xml',         # Menus last
     ],
     'assets': {
         'web.assets_backend': [
@@ -118,6 +131,15 @@
     'auto_install': False,
 }
 ```
+
+| Key | 17.0 behaviour |
+|-----|----------------|
+| `depends` | Defaults to `[]`; 17.0 does **not** inject `base`. List direct dependencies only; use `['base']` only when nothing else applies. |
+| `license` | Missing -> defaults to `LGPL-3` with a warning. Always set it. |
+| `auto_install` | `True` (all depends) or a list that must be a subset of `depends`. |
+| `assets` | Supported (`'web.assets_backend': [...]`). XML `<asset>` records also exist. |
+| `data` / `demo` | Loaded in list order; define before reference (see Data File Ordering). |
+| `application` | Only for full apps. `external_dependencies`: `{'python': [...], 'bin': [...]}`. |
 
 ## Model Template (v17)
 
@@ -582,34 +604,7 @@ class Test{ModelName}(TransactionCase):
         self.assertEqual(len(records), 2)
 ```
 
-## Official Odoo Guidelines (verified for 17.0)
-
-These rules come from Odoo's official skill library (odoo/odoo, `skills/`, branch 20.0) and were checked against the 17.0 source; master-only APIs are translated to the 17.0 equivalent or marked as not available.
-
-### Manifest facts (17.0)
-
-| Key | 17.0 behaviour |
-|-----|----------------|
-| `depends` | Defaults to `[]`; 17.0 does **not** inject `base`. List direct dependencies only; use `['base']` only when nothing else applies. |
-| `license` | Missing -> defaults to `LGPL-3` with a warning. Always set it. |
-| `auto_install` | `True` (all depends) or a list that must be a subset of `depends`. |
-| `assets` | Supported (`'web.assets_backend': [...]`). XML `<asset>` records also exist. |
-| `data` / `demo` | Loaded in list order; define before reference. |
-| `application` | Only for full apps. `external_dependencies`: `{'python': [...], 'bin': [...]}`. |
-
-### Structure and naming
-
-- One model class per file, file named after the model (`models/sale_order.py`). Views `views/<model>_views.xml`, `<model>_templates.xml`, `<module>_menus.xml`, data `data/<model>_data.xml`, demo `demo/<model>_demo.xml`. Security: `security/ir.model.access.csv` + `security/<module>_security.xml` (17.0 has no `ir.access.csv`).
-- Controllers: files named by feature (or `<inherited_module>.py`); `main.py` is legacy. Re-decorate overridden routes with `@http.route()` (17.0 auto-decorates and warns otherwise); the route `type` (`'http'`/`'json'`) cannot change in an override.
-- Reports: SQL-view models in `report/<model>_report.py`; printable reports split into `<model>_reports.xml` (actions) and `<model>_templates.xml` (QWeb).
-- XML ids: `<model>_view_form`, `<model>_view_tree`, `<model>_action`, `<model>_menu`, `<module>_group_<name>`, `<model>_rule_<group>`. In records put `id` before `model`; in fields put `name` first.
-- Model `_name`: dotted, module-prefixed, singular (`my_module.request`); wizards `<base_model>.<action>`; SQL reports `<base_model>.report.<action>`.
-- Method prefixes: `_compute_`, `_inverse_`, `_search_`, `_default_`, `_selection_`, `_onchange_`, `_check_` (constraints), `action_*` (starts with `self.ensure_one()` when it acts on one record). Business methods are private (`_`) unless they must be callable via RPC; `@api.private` exists in 17.0 for public names that must not be exposed.
-- Class body order (17.0): private attributes (`_name`, `_description`, `_inherit`, `_order`, `_sql_constraints`, ...) -> default methods -> fields -> compute/inverse/search methods -> selection methods -> constrains/onchange -> CRUD overrides -> action methods -> other business methods.
-- Imports: stdlib, third party, `odoo` (`from odoo import Command, _, api, fields, models`), then `odoo.addons`.
-- Translations: `_("Text %s", value)` (never `%` after `_()`); `_lt` for module-level strings; no `self.env._` in 17.0.
-
-### Generated tests (17.0)
+### Test rules (17.0)
 
 - Default test tags are `{'standard', 'at_install'}`, also for `HttpCase`. Post-install tests (needed for `HttpCase`/tours and anything needing all modules installed) use `@tagged('post_install', '-at_install')`. Set exactly one of `at_install`/`post_install`; with both the test runs twice, with neither it never runs (`tagged()` logs a warning).
 - A test file must be named `test_*.py` and be imported in `tests/__init__.py`. 17.0 also collects TestCase classes imported into a test file (they run again) and inherited `test_*` methods, so shared base classes must not contain `test_*` methods.
